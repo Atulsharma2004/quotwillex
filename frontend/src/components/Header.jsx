@@ -1,10 +1,16 @@
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../redux/auth/authSlice";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 const Header = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    dispatch(logout()); // Clear user data from Redux store
+    // localStorage.removeItem("user"); // Remove user data from local storage (if stored)
+    Navigate("/"); // Redirect to home dynamically
+  };
 
   return (
     <header className="bg-blue-600 text-white p-4 flex justify-between">
@@ -13,7 +19,7 @@ const Header = () => {
         <div className="flex justify-between gap-8 items-center">
           <Link to="/profile" className="text-white">Profile</Link>
           <Link to="/quotes" className="text-white">Quotes</Link>
-          <Link onClick={() => dispatch(logout())} className="text-white">
+          <Link onClick={handleLogout} className="text-white">
             Logout
           </Link>
           <Link><img src={user.profilePicture || "https://static-00.iconduck.com/assets.00/user-icon-1024x1024-dtzturco.png"} alt="user_img" style={{ borderRadius: "50%", width: "50px", height: "50px" }}/></Link>

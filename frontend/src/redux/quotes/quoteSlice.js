@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import quoteService from "./quoteService";
+// import axios from "axios";
 
 // Get token from local storage
 const token = localStorage.getItem("token");
@@ -21,6 +22,22 @@ export const fetchQuotes = createAsyncThunk("quotes/fetch", async (_, thunkAPI) 
     return thunkAPI.rejectWithValue(error.response?.data?.message || "Something went wrong");
   }
 });
+
+// Fetch Quotes with Authorization Header
+// export const fetchQuotes = createAsyncThunk("quotes/fetchQuotes", async (_, { getState, rejectWithValue }) => {
+//   try {
+//     const token = getState().auth.user?.token; // Get token from Redux state
+//     if (!token) return rejectWithValue("No token available");
+
+//     const response = await axios.get("http://localhost:5000/api/quotes", {
+//       headers: { Authorization: `Bearer ${token}` },
+//     });
+
+//     return response.data;
+//   } catch (error) {
+//     return rejectWithValue(error.response?.data?.message || "Error fetching quotes");
+//   }
+// });
 
 // Create Quote
 export const createQuote = createAsyncThunk("quotes/create", async (text, thunkAPI) => {

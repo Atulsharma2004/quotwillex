@@ -37,26 +37,8 @@ export const loadQuotes = async (req, res) => {
 };
 
   
-  // ✅ Delete a quote and update post count
-  export const deleteQuote = async (req, res) => {
-    try {
-      const quote = await Quote.findById(req.params.id);
-      if (!quote) return res.status(404).json({ message: "Quote not found" });
   
-      if (quote.author.toString() !== req.user.id) {
-        return res.status(403).json({ message: "Not authorized to delete this post" });
-      }
-  
-      await Quote.findByIdAndDelete(req.params.id);
-      
-      // Decrease post count
-      await User.findByIdAndUpdate(req.user.id, { $inc: { postCount: -1 } });
-  
-      res.json({ message: "Quote deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  };
+
 
 
 export const likeQuote = async (req, res) => {
@@ -134,17 +116,38 @@ export const likeQuote = async (req, res) => {
   export const updateQuote = async (req, res) => {
     try {
       const quote = await Quote.findById(req.params.id);
-      if (!quote) return res.status(404).json({ message: "Quote not found" });
   
-      if (quote.author.toString() !== req.user.id) {
-        return res.status(403).json({ message: "Not authorized to edit this post" });
+      if (!quote) return res.status(404).json({ error: "Quote not found" });
+  
+      // Check if the logged-in user is the author or an admin
+      if (quote.author.toString() !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ error: "Not authorized to edit this quote" });
       }
   
       quote.text = req.body.text;
       await quote.save();
-      res.json(quote);
+  
+      res.status(200).json(quote);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: "Server error" });
     }
   };
   
+  // ✅ Delete a quote and update post count
+  export const deleteQuote = async (req, res) => {
+    try {
+      const quote = await Quote.findById(req.params.id);
+  
+      if (!quote) return res.status(404).json({ error: "Quote not found" });
+  
+      // Check if the logged-in user is the author or an admin
+      if (quote.author.toString() !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ error: "Not authorized to delete this quote" });
+      }
+  
+      await quote.deleteOne();
+      res.status(200).json({ message: "Quote deleted successfully", id: req.params.id });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  };

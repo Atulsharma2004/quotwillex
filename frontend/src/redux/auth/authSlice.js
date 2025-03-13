@@ -46,7 +46,7 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-    .addCase(register.fulfilled, (state, action) => {
+    .addCase(register.fulfilled, (state) => {
       // state.user = action.payload.user;
       // state.token = action.payload.token;
       // localStorage.setItem("user", JSON.stringify(action.payload.user));
