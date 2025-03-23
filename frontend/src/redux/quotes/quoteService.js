@@ -1,15 +1,25 @@
 import api from "../../api/api";
 
+// const getQuotes = async (token) => {
+//   const response = await api.get("/quotes", {
+//     headers: { Authorization: `Bearer ${token}` },
+//   });
+//   return response.data;
+// };
 const getQuotes = async (token) => {
-  const response = await api.get("/quotes", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const config = {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  };
+
+  const response = await api.get("/quotes/", config);
   return response.data;
 };
 
 const createQuote = async (text, token) => {
   const response = await api.post(
-    "/quotes",
+    "/quotes/",
     { text },
     { headers: { Authorization: `Bearer ${token}` } }
   );
@@ -55,6 +65,22 @@ const commentQuote = async (id, text, token) => {
   return response.data;
 };
 
+const editComment = async (quoteId, commentId, text, token) => {
+  const response = await api.put(
+    `/quotes/${quoteId}/comment/${commentId}`,
+    { text },
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  return response.data;
+};
+
+const deleteComment = async (quoteId, commentId, token) => {
+  await api.delete(`/quotes/${quoteId}/comment/${commentId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return { quoteId, commentId };
+};
+
 export default {
   getQuotes,
   createQuote,
@@ -63,4 +89,6 @@ export default {
   likeQuote,
   dislikeQuote,
   commentQuote,
+  editComment,  // Added
+  deleteComment, // Added
 };

@@ -23,21 +23,7 @@ export const fetchQuotes = createAsyncThunk("quotes/fetch", async (_, thunkAPI) 
   }
 });
 
-// Fetch Quotes with Authorization Header
-// export const fetchQuotes = createAsyncThunk("quotes/fetchQuotes", async (_, { getState, rejectWithValue }) => {
-//   try {
-//     const token = getState().auth.user?.token; // Get token from Redux state
-//     if (!token) return rejectWithValue("No token available");
 
-//     const response = await axios.get("http://localhost:5000/api/quotes", {
-//       headers: { Authorization: `Bearer ${token}` },
-//     });
-
-//     return response.data;
-//   } catch (error) {
-//     return rejectWithValue(error.response?.data?.message || "Error fetching quotes");
-//   }
-// });
 
 // Create Quote
 export const createQuote = createAsyncThunk("quotes/create", async (text, thunkAPI) => {
@@ -93,6 +79,24 @@ export const commentQuote = createAsyncThunk("quotes/comment", async ({ id, text
   }
 });
 
+// Edit Comment on Quote
+export const editComment = createAsyncThunk("quotes/editComment", async ({ quoteId, commentId, text }, thunkAPI) => {
+  try {
+    return await quoteService.editComment(quoteId, commentId, text, token);
+  } catch (error) {
+    return thunkAPI.rejectWithValue(error.response?.data?.message || "Something went wrong");
+  }
+});
+
+// Delete Comment on Quote
+export const deleteComment = createAsyncThunk("quotes/deleteComment", async ({ quoteId, commentId }, thunkAPI) => {
+  try {
+    return await quoteService.deleteComment(quoteId, commentId, token);
+  } catch (error) {
+    return thunkAPI.rejectWithValue(error.response?.data?.message || "Something went wrong");
+  }
+});
+
 // Slice
 const quoteSlice = createSlice({
   name: "quotes",
@@ -128,6 +132,21 @@ const quoteSlice = createSlice({
         state.quotes = state.quotes.map((quote) =>
           quote._id === action.payload._id ? action.payload : quote
         );
+      }).addCase(editComment.fulfilled, (state, action) => {
+        state.quotes = state.quotes.map((quote) =>
+          quote._id === action.payload._id ? action.payload : quote
+        );
+      })
+      .addCase(deleteComment.fulfilled, (state, action) => {
+        state.quotes = state.quotes.map((quote) => {
+          if (quote._id === action.payload.quoteId) {
+            return {
+              ...quote,
+              comments: quote.comments.filter((comment) => comment._id !== action.payload.commentId),
+            };
+          }
+          return quote;
+        });
       });
   },
 });

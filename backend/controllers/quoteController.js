@@ -36,24 +36,22 @@ export const loadQuotes = async (req, res) => {
   }
 };
 
-  
-  
-
-
 
 export const likeQuote = async (req, res) => {
   try {
-    const quote = await Quote.findById(req.params.id).populate("likes", "name profilePicture").populate("dislikes", "name profilePicture").populate("comments.user", "name profilePicture");
-
+    const quote = await Quote.findById(req.params.id);
     if (!quote) return res.status(404).json({ message: "Quote not found" });
 
-    if (!quote.likes.some((user) => user._id.toString() === req.user.id)) {
+    if (!quote.likes.includes(req.user.id)) {
       quote.likes.push(req.user.id);
-      quote.dislikes = quote.dislikes.filter((user) => user._id.toString() !== req.user.id);
+      quote.dislikes = quote.dislikes.filter((user) => user.toString() !== req.user.id);
     }
 
     await quote.save();
+
+    // Fetch updated quote with author details
     const updatedQuote = await Quote.findById(req.params.id)
+      .populate("author", "name profilePicture role") // ✅ Ensure author details are included
       .populate("likes", "name profilePicture")
       .populate("dislikes", "name profilePicture")
       .populate("comments.user", "name profilePicture");
@@ -63,21 +61,26 @@ export const likeQuote = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
   
 
+  
+  
   export const dislikeQuote = async (req, res) => {
     try {
-      const quote = await Quote.findById(req.params.id).populate("likes", "name profilePicture").populate("dislikes", "name profilePicture").populate("comments.user", "name profilePicture");
-  
+      const quote = await Quote.findById(req.params.id);
       if (!quote) return res.status(404).json({ message: "Quote not found" });
   
-      if (!quote.dislikes.some((user) => user._id.toString() === req.user.id)) {
+      if (!quote.dislikes.includes(req.user.id)) {
         quote.dislikes.push(req.user.id);
-        quote.likes = quote.likes.filter((user) => user._id.toString() !== req.user.id);
+        quote.likes = quote.likes.filter((user) => user.toString() !== req.user.id);
       }
   
       await quote.save();
+  
+      // Fetch updated quote with author details
       const updatedQuote = await Quote.findById(req.params.id)
+        .populate("author", "name profilePicture role") // ✅ Ensure author details are included
         .populate("likes", "name profilePicture")
         .populate("dislikes", "name profilePicture")
         .populate("comments.user", "name profilePicture");
@@ -88,19 +91,20 @@ export const likeQuote = async (req, res) => {
     }
   };
   
-  
+
 
   export const commentQuote = async (req, res) => {
     try {
       const quote = await Quote.findById(req.params.id);
-  
       if (!quote) return res.status(404).json({ message: "Quote not found" });
   
       const newComment = { user: req.user.id, text: req.body.text };
       quote.comments.push(newComment);
-  
       await quote.save();
+  
+      // Fetch updated quote with author details
       const updatedQuote = await Quote.findById(req.params.id)
+        .populate("author", "name profilePicture role") // ✅ Ensure author details are included
         .populate("likes", "name profilePicture")
         .populate("dislikes", "name profilePicture")
         .populate("comments.user", "name profilePicture");
@@ -110,6 +114,7 @@ export const likeQuote = async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   };
+  
   
   
   // ✅ Edit own quote
@@ -151,3 +156,65 @@ export const likeQuote = async (req, res) => {
       res.status(500).json({ error: "Server error" });
     }
   };
+
+
+  export const editComment = async (req, res) => {
+    try {
+      const quote = await Quote.findById(req.params.id);
+      if (!quote) return res.status(404).json({ error: "Quote not found" });
+  
+      const comment = quote.comments.id(req.params.commentId);
+      if (!comment) return res.status(404).json({ error: "Comment not found" });
+  
+      // Check if the logged-in user is the comment author or an admin
+      if (comment.user.toString() !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ error: "Not authorized to edit this comment" });
+      }
+  
+      comment.text = req.body.text;
+      comment.updatedAt = Date.now();
+      await quote.save();
+  
+      // Return updated quote with populated fields
+      const updatedQuote = await Quote.findById(req.params.id)
+        .populate("author", "name profilePicture role")
+        .populate("likes", "name profilePicture")
+        .populate("dislikes", "name profilePicture")
+        .populate("comments.user", "name profilePicture");
+  
+      res.status(200).json(updatedQuote);
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+
+  export const deleteComment = async (req, res) => {
+    try {
+      const quote = await Quote.findById(req.params.id);
+      if (!quote) return res.status(404).json({ error: "Quote not found" });
+  
+      const comment = quote.comments.id(req.params.commentId);
+      if (!comment) return res.status(404).json({ error: "Comment not found" });
+  
+      // Check if the logged-in user is the comment author or an admin
+      if (comment.user.toString() !== req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ error: "Not authorized to delete this comment" });
+      }
+  
+      comment.deleteOne();
+      await quote.save();
+  
+      // Return updated quote with populated fields
+      const updatedQuote = await Quote.findById(req.params.id)
+        .populate("author", "name profilePicture role")
+        .populate("likes", "name profilePicture")
+        .populate("dislikes", "name profilePicture")
+        .populate("comments.user", "name profilePicture");
+  
+      res.status(200).json({ message: "Comment deleted successfully", updatedQuote });
+    } catch (error) {
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+  
+
