@@ -1,11 +1,36 @@
 import express from "express";
-import { createQuote, deleteQuote, updateQuote, likeQuote, dislikeQuote, commentQuote, loadQuotes, editComment, deleteComment } from "../controllers/quoteController.js";
-import authMiddleware from "../middleware/authMiddleware.js";
+import {
+  createQuote,
+  createPopularQuote,
+  deleteQuote,
+  updateQuote,
+  likeQuote,
+  dislikeQuote,
+  commentQuote,
+  loadQuotes,
+  loadPopularQuotes,
+  loadGuestQuotes,
+  loadHomeShowcase,
+  loadQuoteOfTheDay,
+  editComment,
+  deleteComment,
+} from "../controllers/quoteController.js";
+import { loadAwardsLeaderboard } from "../controllers/awardsController.js";
+import authMiddleware, {
+  requireAdmin,
+} from "../middleware/authMiddleware.js";
+import { searchLimiter } from "../middleware/rateLimiters.js";
 
 const router = express.Router();
 
 router.post("/", authMiddleware, createQuote);
 router.get("/", authMiddleware, loadQuotes);
+router.get("/quote-of-the-day", loadQuoteOfTheDay);
+router.get("/awards", loadAwardsLeaderboard);
+router.get("/showcase", loadHomeShowcase);
+router.get("/guest", searchLimiter, loadGuestQuotes);
+router.post("/popular", authMiddleware, requireAdmin, createPopularQuote);
+router.get("/popular", authMiddleware, loadPopularQuotes);
 router.put("/:id", authMiddleware, updateQuote);
 router.delete("/:id", authMiddleware, deleteQuote);
 router.put("/:id/like", authMiddleware, likeQuote);

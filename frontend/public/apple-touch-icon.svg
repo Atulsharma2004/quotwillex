@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" role="img" aria-label="QuoteApp">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="url(#g)"/>
+  <path fill="#fff" d="M48 112c0-18 10.5-31 26.5-34l2.2 8.5c-8.8 2.4-14 9.3-14 18.2h14.4V128H48v-16zm52 0c0-18 10.5-31 26.5-34l2.2 8.5c-8.8 2.4-14 9.3-14 18.2H129V128h-29v-16z"/>
+</svg>

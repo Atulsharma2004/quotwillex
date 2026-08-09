@@ -1,10 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { FaQuoteLeft } from "react-icons/fa";
-import { FaEdit } from "react-icons/fa";
-import { FaSave } from "react-icons/fa";
-import { RiDeleteBin6Fill } from "react-icons/ri";
-
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   fetchQuotes,
   createQuote,
@@ -15,354 +11,688 @@ import {
   commentQuote,
   editComment,
   deleteComment,
+  optimisticToggleLike,
+  optimisticToggleDislike,
+  optimisticUpdateQuoteText,
+  optimisticCreateQuote,
 } from "../redux/quotes/quoteSlice";
-import { Navigate } from "react-router-dom";
+import {
+  followUser,
+  unfollowUser,
+  patchFollowingLocal,
+} from "../redux/auth/authSlice";
+import QuoteCard from "../components/QuoteCard";
+import Pagination from "../components/Pagination";
+import { QuoteFeedSkeleton } from "../components/Shimmer";
+import Seo from "../components/Seo";
+import {
+  QUOTE_CATEGORIES,
+  OTHER_CATEGORY_VALUE,
+  categoryLabel,
+} from "../constants/quoteCategories";
+import { SEO_ROUTES } from "../constants/site";
+import { quoteUi, sortOptions } from "../constants/quoteUi";
+import {
+  moderateText,
+  getAbuseRejectionMessage,
+} from "../utils/contentModeration";
+import {
+  FaCalendarAlt,
+  FaChevronDown,
+  FaFilter,
+  FaPenNib,
+  FaPlus,
+  FaSearch,
+  FaSortAmountDown,
+  FaTimes,
+} from "react-icons/fa";
+
+const QUOTES_PER_PAGE = 10;
 
 const Quotes = () => {
   const dispatch = useDispatch();
-  const { quotes } = useSelector((state) => state.quotes);
-  const { user } = useSelector((state) => state.auth); // Get the logged-in user
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const composeRef = useRef(null);
+  const composeInputRef = useRef(null);
+  const { quotes, quotesMeta, isLoading, isError, errorMessage } = useSelector(
+    (state) => state.quotes
+  );
+  const { user } = useSelector((state) => state.auth);
   const [newQuote, setNewQuote] = useState("");
-  // const [commentText, setCommentText] = useState("");
-
-  // State for editing mode
+  const [newCategory, setNewCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
+  const [newLanguage, setNewLanguage] = useState("english");
   const [editQuoteId, setEditQuoteId] = useState(null);
   const [editText, setEditText] = useState("");
-
-  const [localQuotes, setLocalQuotes] = useState([]);
-
-  const [commentText, setCommentText] = useState("");
-  const [visibleComments, setVisibleComments] = useState({});
-
+  const [editCategory, setEditCategory] = useState("");
+  const [editCustomCategory, setEditCustomCategory] = useState("");
   const [editCommentId, setEditCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [followBusyId, setFollowBusyId] = useState(null);
+  const [deletingQuoteId, setDeletingQuoteId] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [createError, setCreateError] = useState("");
+  const initialCategory = String(searchParams.get("category") || "all")
+    .trim()
+    .toLowerCase();
+  const initialSearch = String(
+    searchParams.get("search") || searchParams.get("q") || ""
+  ).trim();
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [sortBy, setSortBy] = useState("newest");
+  const [categoryFilter, setCategoryFilter] = useState(
+    initialCategory || "all"
+  );
+  const [languageFilter, setLanguageFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const hasActiveFilters =
+    searchQuery.trim() ||
+    sortBy !== "newest" ||
+    categoryFilter !== "all" ||
+    languageFilter !== "all" ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo);
+
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSortBy("newest");
+    setCategoryFilter("all");
+    setLanguageFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setCurrentPage(1);
+    if (location.search) {
+      navigate("/quotes", { replace: true });
+    }
+  };
 
   useEffect(() => {
-    dispatch(fetchQuotes());
-  }, [dispatch]);
+    const cat = String(searchParams.get("category") || "all")
+      .trim()
+      .toLowerCase();
+    const q = String(
+      searchParams.get("search") || searchParams.get("q") || ""
+    ).trim();
+    setCategoryFilter(cat || "all");
+    setSearchQuery(q);
+    setCurrentPage(1);
+  }, [searchParams]);
 
   useEffect(() => {
-    setLocalQuotes(quotes); // Sync state with fetched quotes
-  }, [quotes]);
+    dispatch(
+      fetchQuotes({
+        page: currentPage,
+        limit: QUOTES_PER_PAGE,
+        search: searchQuery.trim() || undefined,
+        sortBy,
+        category: categoryFilter,
+        language: languageFilter,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      })
+    );
+  }, [
+    dispatch,
+    currentPage,
+    searchQuery,
+    sortBy,
+    categoryFilter,
+    languageFilter,
+    dateFrom,
+    dateTo,
+  ]);
+
+  useEffect(() => {
+    const wantsCompose =
+      location.hash === "#compose" || searchParams.get("compose") === "1";
+    if (!wantsCompose) return;
+    const timer = window.setTimeout(() => {
+      composeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      composeInputRef.current?.focus();
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [location.hash, searchParams]);
+
+  const userSnapshot = user
+    ? {
+        _id: user._id,
+        name: user.name,
+        profilePicture: user.profilePicture,
+      }
+    : null;
+
+  const filteredQuotes = quotes;
+  const totalPages = Math.max(1, quotesMeta?.totalPages || 1);
+  const activePage = Math.min(currentPage, totalPages);
+  const pageStart = (activePage - 1) * (quotesMeta?.limit || QUOTES_PER_PAGE);
+  const paginatedQuotes = filteredQuotes;
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const resolveCategory = (selected, custom) => {
+    if (selected === OTHER_CATEGORY_VALUE) {
+      return custom.trim().toLowerCase();
+    }
+    return selected;
+  };
 
   const handleCreate = async () => {
-    if (newQuote.trim()) {
-      const action = await dispatch(createQuote(newQuote));
-      if (action.payload) {
-        setLocalQuotes([action.payload, ...localQuotes]); // Add new quote at the top
-      }
-      setNewQuote("");
-      dispatch(fetchQuotes());
+    if (!newQuote.trim()) return;
+    if (newCategory === OTHER_CATEGORY_VALUE && !customCategory.trim()) {
+      setCreateError(
+        newLanguage === "hindi"
+          ? "कृपया अपनी श्रेणी लिखें।"
+          : "Please write your custom category."
+      );
+      return;
+    }
+
+    const moderation = await moderateText(newQuote, newLanguage);
+    if (moderation.blocked) {
+      setCreateError(
+        moderation.message ||
+          getAbuseRejectionMessage(moderation.words, newLanguage)
+      );
+      return;
+    }
+
+    const text = newQuote.trim();
+    const category = resolveCategory(newCategory, customCategory);
+    const language = newLanguage;
+    const tempId = `temp-${Date.now()}`;
+
+    setCreateError("");
+    setNewQuote("");
+    setNewCategory("");
+    setCustomCategory("");
+    setNewLanguage("english");
+    dispatch(
+      optimisticCreateQuote({
+        _id: tempId,
+        text,
+        ...(category ? { category } : {}),
+        language,
+        author: {
+          _id: user._id,
+          name: user.name,
+          username: user.username,
+          profilePicture: user.profilePicture,
+        },
+        likes: [],
+        dislikes: [],
+        comments: [],
+        createdAt: new Date().toISOString(),
+      })
+    );
+
+    const action = await dispatch(createQuote({ text, category, language, tempId }));
+    if (createQuote.rejected.match(action)) {
+      setCreateError(action.payload || "Unable to post the quote. Please try again.");
     }
   };
 
   const handleEditClick = (quote) => {
     setEditQuoteId(quote._id);
     setEditText(quote.text);
+    const known = QUOTE_CATEGORIES.includes(quote.category);
+    setEditCategory(known ? quote.category || "" : quote.category ? OTHER_CATEGORY_VALUE : "");
+    setEditCustomCategory(known ? "" : quote.category || "");
   };
 
   const handleSaveClick = async (id) => {
-    if (editText.trim()) {
-      const action = await dispatch(updateQuote({ id, text: editText }));
-      if (action.payload) {
-        setLocalQuotes(
-          localQuotes.map((q) => (q._id === id ? { ...q, text: editText } : q))
-        ); // Update quote in local state
-      }
-      setEditQuoteId(null); // Exit edit mode
+    if (!editText.trim()) return;
+    if (editCategory === OTHER_CATEGORY_VALUE && !editCustomCategory.trim()) return;
+    const moderation = await moderateText(editText, newLanguage);
+    if (moderation.blocked) {
+      setCreateError(
+        moderation.message ||
+          getAbuseRejectionMessage(moderation.words, newLanguage)
+      );
+      return;
     }
+    const text = editText.trim();
+    const category = resolveCategory(editCategory, editCustomCategory);
+    dispatch(optimisticUpdateQuoteText({ id, text, category }));
+    setEditQuoteId(null);
+    dispatch(updateQuote({ id, text, category })).then((action) => {
+      if (updateQuote.rejected.match(action)) {
+        dispatch(fetchQuotes());
+      }
+    });
   };
 
   const handleDelete = async (id) => {
-    await dispatch(deleteQuote(id));
-    setLocalQuotes(localQuotes.filter((q) => q._id !== id)); // Remove quote dynamically
-  };
+    const confirmed = window.confirm(
+      "Delete this quote permanently? This action cannot be undone."
+    );
+    if (!confirmed) return;
 
-  const handleLike = async (id) => {
-    const action = await dispatch(likeQuote(id));
-    if (action.payload) {
-      setLocalQuotes((prevQuotes) =>
-        prevQuotes.map((quote) =>
-          quote._id === id
-            ? { ...quote, ...action.payload } // Ensuring full data update, including author
-            : quote
-        )
-      );
+    setDeleteError("");
+    setDeletingQuoteId(id);
+    const action = await dispatch(deleteQuote(id));
+    setDeletingQuoteId(null);
+
+    if (deleteQuote.rejected.match(action)) {
+      setDeleteError(action.payload || "Unable to delete the quote. Please try again.");
     }
   };
 
-  const handleDislike = async (id) => {
-    const action = await dispatch(dislikeQuote(id));
-    if (action.payload) {
-      setLocalQuotes((prevQuotes) =>
-        prevQuotes.map((quote) =>
-          quote._id === id ? { ...quote, ...action.payload } : quote
-        )
-      );
-    }
-  };
-
-  const handleCommentSubmit = async (quoteId) => {
-    if (commentText.trim()) {
-      const action = await dispatch(
-        commentQuote({ id: quoteId, text: commentText })
-      );
-      if (action.payload) {
-        setLocalQuotes((prevQuotes) =>
-          prevQuotes.map((quote) =>
-            quote._id === quoteId ? { ...quote, ...action.payload } : quote
-          )
-        );
+  const handleLike = (id) => {
+    if (!user) return;
+    dispatch(
+      optimisticToggleLike({
+        quoteId: id,
+        userId: user._id,
+        userSnapshot,
+      })
+    );
+    dispatch(likeQuote(id)).then((action) => {
+      if (likeQuote.rejected.match(action)) {
+        dispatch(fetchQuotes());
       }
-      setCommentText("");
-    }
+    });
   };
 
-  // Handle Load More Comments
-  const handleLoadMoreComments = (quoteId) => {
-    setVisibleComments((prev) => ({
-      ...prev,
-      [quoteId]: (prev[quoteId] || 1) + 1, // Load 3 more comments
-    }));
+  const handleDislike = (id) => {
+    if (!user) return;
+    dispatch(
+      optimisticToggleDislike({
+        quoteId: id,
+        userId: user._id,
+        userSnapshot,
+      })
+    );
+    dispatch(dislikeQuote(id)).then((action) => {
+      if (dislikeQuote.rejected.match(action)) {
+        dispatch(fetchQuotes());
+      }
+    });
   };
 
-  // Handle edit comment
+  const handleComment = (quoteId, text) => {
+    dispatch(commentQuote({ id: quoteId, text }));
+  };
+
   const handleEditComment = (comment) => {
     setEditCommentId(comment._id);
     setEditCommentText(comment.text);
   };
 
-  // Handle save edited comment
   const handleSaveComment = async (quoteId, commentId) => {
-    if (editCommentText.trim()) {
-      const action = await dispatch(
-        editComment({ quoteId, commentId, text: editCommentText })
-      );
-      if (action.payload) {
-        setLocalQuotes((prevQuotes) =>
-          prevQuotes.map((quote) =>
-            quote._id === quoteId ? action.payload : quote
-          )
+    if (!editCommentText.trim()) return;
+    await dispatch(
+      editComment({ quoteId, commentId, text: editCommentText.trim() })
+    );
+    setEditCommentId(null);
+  };
+
+  const handleDeleteComment = (quoteId, commentId) => {
+    dispatch(deleteComment({ quoteId, commentId }));
+  };
+
+  const handleFollowToggle = (authorId, currentlyFollowing, author) => {
+    if (!user || !authorId) return;
+    const willFollow = !currentlyFollowing;
+    const snapshot = {
+      _id: authorId,
+      name: author?.name,
+      username: author?.username,
+      profilePicture: author?.profilePicture,
+    };
+
+    setFollowBusyId(authorId);
+    dispatch(
+      patchFollowingLocal({
+        targetId: authorId,
+        following: willFollow,
+        targetSnapshot: snapshot,
+      })
+    );
+
+    const action = currentlyFollowing
+      ? unfollowUser(authorId)
+      : followUser(authorId);
+
+    dispatch(action).then((result) => {
+      setFollowBusyId(null);
+      if (
+        followUser.rejected.match(result) ||
+        unfollowUser.rejected.match(result)
+      ) {
+        dispatch(
+          patchFollowingLocal({
+            targetId: authorId,
+            following: currentlyFollowing,
+            targetSnapshot: snapshot,
+          })
         );
       }
-      setEditCommentId(null);
-    }
+    });
   };
 
-  // Handle delete comment
-  const handleDeleteComment = async (quoteId, commentId) => {
-    await dispatch(deleteComment({ quoteId, commentId }));
-    setLocalQuotes((prevQuotes) =>
-      prevQuotes.map((quote) =>
-        quote._id === quoteId
-          ? {
-              ...quote,
-              comments: quote.comments.filter((c) => c._id !== commentId),
-            }
-          : quote
-      )
-    );
-  };
-
-  if (!user) {
-    Navigate("/login");
-    if (!quotes) return <p>Please login to view your Quotes.</p>;
-  }
+  const postUi = quoteUi(newLanguage);
+  const filterUi = quoteUi(languageFilter === "hindi" ? "hindi" : "english");
+  const filterSortOptions = sortOptions(
+    languageFilter === "hindi" ? "hindi" : "english"
+  );
 
   return (
-    <div className="p-4">
-      <h2 className="text-2xl font-bold text-center">Quotes</h2>
+    <div className="p-4 sm:p-6">
+      <Seo {...SEO_ROUTES.quotes} />
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-6">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-500">
+            Community feed
+          </p>
+          <h1 className="mt-1 text-3xl font-bold text-gray-900">Quotes</h1>
+        </div>
 
-      {/* Add New Quote */}
-      <div className="my-4 flex flex-col w-3/4 mx-auto">
-        <input
-          type="text"
-          className="border p-4 h-24 rounded-sm"
-          value={newQuote}
-          onChange={(e) => setNewQuote(e.target.value)}
-          placeholder="Add a new quote..."
-        />
-        <button
-          className="bg-blue-500 text-white p-2 mt-2 rounded-lg"
-          onClick={handleCreate}
+        <section
+          id="compose"
+          ref={composeRef}
+          className="mb-5 overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm scroll-mt-24"
         >
-          Add Quote
-        </button>
-      </div>
-
-      {/* Display Quotes */}
-      {localQuotes.map((quote) => (
-        <div
-          key={quote._id}
-          className="border px-4 py-2 my-2 w-3/4 mx-auto rounded-lg"
-        >
-          <div className="header-quote-post   px-2 py-1">
-            <div className="owner-detail flex items-center gap-2   rounded-md px-2 py-2">
-              <img
-                src={quote.author.profilePicture}
-                alt="owner-pic"
-                className="w-10 h-10 rounded-full"
-              />
-              <div className="author-name">
-                <p className="font-bold">{quote.author.name}</p>
-              </div>
+          <div className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-blue-600 px-5 py-3 text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15">
+              <FaPenNib className="text-sm" />
+            </span>
+            <div>
+              <h3 className="font-semibold">{postUi.shareTitle}</h3>
+              <p className="text-xs text-indigo-100">{postUi.shareSubtitle}</p>
             </div>
-            
           </div>
-
-          <div className="py-8 bg-[url('https://hbr.org/resources/images/article_assets/2018/08/R1805D_CHIN.jpg')] flex items-center justify-center">
-            <div className="w-3/4 bg-white border border-2 mx-auto shadow-xl px-4 py-4 rounded-md">
-              <p className="text-xl mb-1 font-bold text-blue-600">
-                <FaQuoteLeft />
+          <div className="p-4">
+            {createError && (
+              <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {createError}
               </p>
-              {editQuoteId === quote._id ? (
+            )}
+            <textarea
+              ref={composeInputRef}
+              rows={3}
+              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              value={newQuote}
+              onChange={(e) => setNewQuote(e.target.value)}
+              placeholder={postUi.quotePlaceholder}
+            />
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2">
+              <select
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                value={newCategory}
+                onChange={(e) => {
+                  setNewCategory(e.target.value);
+                  if (e.target.value !== OTHER_CATEGORY_VALUE) setCustomCategory("");
+                }}
+                aria-label={postUi.categoryOptional}
+              >
+                <option value="">{postUi.chooseCategory}</option>
+                {QUOTE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {categoryLabel(cat, newLanguage)}
+                  </option>
+                ))}
+                <option value={OTHER_CATEGORY_VALUE}>{postUi.otherCategory}</option>
+              </select>
+              {newCategory === OTHER_CATEGORY_VALUE && (
                 <input
                   type="text"
-                  className="w-full border p-2 rounded-md"
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder={postUi.customCategoryPlaceholder}
+                  maxLength={40}
+                  className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                 />
-              ) : (
-                <p className="text-xl italic">{quote.text}</p>
               )}
+              <select
+                className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                value={newLanguage}
+                onChange={(e) => setNewLanguage(e.target.value)}
+                aria-label={postUi.quoteLanguage}
+              >
+                <option value="english">{postUi.english}</option>
+                <option value="hindi">{postUi.hindi}</option>
+              </select>
+              </div>
+              <button
+                type="button"
+                disabled={!newQuote.trim()}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:shadow-none"
+                onClick={handleCreate}
+              >
+                <FaPlus className="text-xs" />
+                {postUi.postQuote}
+              </button>
             </div>
           </div>
-          <div className="flex items-center justify-between px-2 py-1 mt-2">
-            <div className="flex gap-2">
-              <button className="flex" onClick={() => handleLike(quote._id)}>
-                <span>👍</span> <span>{quote.likes.length}</span>
-              </button>
-              <button className="flex" onClick={() => handleDislike(quote._id)}>
-                <span>👎</span> <span>{quote.dislikes.length}</span>
-              </button>
-            </div>
-            <div className="edit-delete-button flex gap-4">
-              {/* Only show Edit/Delete buttons if the user is the author or an admin */}
-              {(user?._id === quote.author._id || user?.role === "admin") && (
-                <>
-                  {editQuoteId === quote._id ? (
-                    <button
-                      className="bg-green-500 text-white px-4 py-1  rounded-lg"
-                      onClick={() => handleSaveClick(quote._id)}
-                    >
-                      <FaSave />
-                    </button>
-                  ) : (
-                    <button
-                      className="bg-blue-500 text-white px-4 py-1 rounded-lg"
-                      onClick={() => handleEditClick(quote)}
-                    >
-                      <FaEdit />
-                    </button>
-                  )}
-                  <button
-                    className="bg-red-500 text-white  px-4 py-1 rounded-lg"
-                    onClick={() => handleDelete(quote._id)}
-                  >
-                    <RiDeleteBin6Fill />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+        </section>
 
-          {/* Comment Section */}
-          <div className="mt-4">
+        <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                <FaFilter className="text-xs" />
+              </span>
+              <h3 className="font-semibold text-gray-800">{filterUi.exploreQuotes}</h3>
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-500 transition hover:text-indigo-600"
+              >
+                <FaTimes />
+                {filterUi.clearFilters}
+              </button>
+            )}
+          </div>
+          <div className="relative">
+            <FaSearch className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400" />
             <input
-              type="text"
-              placeholder="Add a comment..."
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              className="border p-2 w-full rounded-md"
+              type="search"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder={filterUi.searchQuotesPeople}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
             />
-            <button
-              onClick={() => handleCommentSubmit(quote._id)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-md mt-2"
-            >
-              Comment
-            </button>
-
-            {/* Display Comments */}
-            <div className="mt-4">
-              {quote.comments
-                .slice(0, visibleComments[quote._id] || 1)
-                .map((comment) => (
-                  <div
-                    key={comment._id}
-                    className="flex  justify-between gap-2 p-2 border rounded-md"
-                  >
-                    <div className="flex gap-2 items-center">
-                      <div className="">
-                        <img
-                          src={comment.user.profilePicture}
-                          alt="User"
-                          className="w-8 h-8 rounded-full"
-                        />
-                      </div>
-                      <div className="">
-                        <p className="font-bold">{comment.user.name}</p>
-                        {editCommentId === comment._id ? (
-                          <input
-                            type="text"
-                            className="border p-2 rounded-md w-full"
-                            value={editCommentText}
-                            onChange={(e) => setEditCommentText(e.target.value)}
-                          />
-                        ) : (
-                          <p>{comment.text}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Edit and Delete buttons for comment */}
-
-                    {(user?._id === comment.user._id ||
-                      user?.role === "admin") && (
-                      <div className="flex gap-6">
-                        {editCommentId === comment._id ? (
-                          <button
-                            onClick={() =>
-                              handleSaveComment(quote._id, comment._id)
-                            }
-                            className="text-green-500 text-xl font-bold"
-                          >
-                            
-                            <FaSave />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleEditComment(comment)}
-                            className="text-blue-500 text-xl font-bold"
-                          >
-                            <FaEdit/>
-                          </button>
-                        )}
-                        <button
-                          onClick={() =>
-                            handleDeleteComment(quote._id, comment._id)
-                          }
-                          className="text-red-500 text-xl font-bold"
-                        >
-                          <RiDeleteBin6Fill/>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-              {/* Load More Comments Button */}
-              {quote.comments.length > (visibleComments[quote._id] || 1) && (
-                <button
-                  onClick={() => handleLoadMoreComments(quote._id)}
-                  className="text-blue-500 mt-2"
-                >
-                  Load More Comments
-                </button>
-              )}
-            </div>
           </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="relative">
+              <FaSortAmountDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400" />
+              <select
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-8 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label={filterUi.sortQuotes}
+              >
+                {filterSortOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <FaChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400" />
+            </label>
+            <label className="relative">
+              <FaFilter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400" />
+              <select
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-8 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                value={languageFilter}
+                onChange={(e) => {
+                  setLanguageFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label={filterUi.filterByLanguage}
+              >
+                <option value="all">{filterUi.allLanguages}</option>
+                <option value="english">{filterUi.english}</option>
+                <option value="hindi">{filterUi.hindi}</option>
+              </select>
+              <FaChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400" />
+            </label>
+            <label className="relative">
+              <FaFilter className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400" />
+              <select
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-8 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label={filterUi.filterByCategory}
+              >
+                <option value="all">{filterUi.allCategories}</option>
+                {QUOTE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {categoryLabel(cat, languageFilter === "hindi" ? "hindi" : "english")}
+                  </option>
+                ))}
+              </select>
+              <FaChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400" />
+            </label>
+            <label className="relative sm:col-span-1">
+              <FaCalendarAlt className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-xs text-gray-400" />
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label={filterUi.filterByDateFrom}
+                title={filterUi.filterByDateFrom}
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-3 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              />
+            </label>
+            <label className="relative sm:col-span-1">
+              <FaCalendarAlt className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-xs text-gray-400" />
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setCurrentPage(1);
+                }}
+                aria-label={filterUi.filterByDateTo}
+                title={filterUi.filterByDateTo}
+                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-8 pr-3 text-sm text-gray-600 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              />
+            </label>
+          </div>
+          {!isLoading && (
+            <p className="mt-3 text-xs font-medium text-gray-500">
+              {filteredQuotes.length
+                ? filterUi.showingRange(
+                    filteredQuotes.length
+                      ? pageStart + 1
+                      : 0,
+                    pageStart + filteredQuotes.length,
+                    quotesMeta?.total || filteredQuotes.length
+                  )
+                : filterUi.noQuotesYet}
+            </p>
+          )}
+        </section>
+      </div>
+
+      <div>
+        {/* Quote feed */}
+
+      {isLoading && <QuoteFeedSkeleton count={4} />}
+      {isError && (
+        <p className="text-center text-red-600">{errorMessage}</p>
+      )}
+      {deleteError && (
+        <p className="mx-auto mb-4 w-3/4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700">
+          {deleteError}
+        </p>
+      )}
+
+      {!isLoading && filteredQuotes.length === 0 && (
+        <div className="mt-10 text-center">
+          <p className="text-gray-500">
+            {hasActiveFilters ? filterUi.noMatch : filterUi.noQuotesYet}
+          </p>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 rounded-full border border-indigo-200 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              Clear filters
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                composeRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                });
+                composeInputRef.current?.focus();
+              }}
+              className="mt-4 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Write the first quote
+            </button>
+          )}
         </div>
-      ))}
+      )}
+
+      {!isLoading &&
+        paginatedQuotes.map((quote) => (
+          <QuoteCard
+            key={quote._id}
+            quote={quote}
+            user={user}
+            onLike={handleLike}
+            onDislike={handleDislike}
+            onEdit={handleEditClick}
+            onSave={handleSaveClick}
+            onDelete={handleDelete}
+            deletingQuoteId={deletingQuoteId}
+            onComment={handleComment}
+            onEditComment={handleEditComment}
+            onSaveComment={handleSaveComment}
+            onDeleteComment={handleDeleteComment}
+            onFollowToggle={handleFollowToggle}
+            followBusyId={followBusyId}
+            editQuoteId={editQuoteId}
+            editText={editText}
+            setEditText={setEditText}
+            editCategory={editCategory}
+            setEditCategory={setEditCategory}
+            editCustomCategory={editCustomCategory}
+            setEditCustomCategory={setEditCustomCategory}
+            editCommentId={editCommentId}
+            editCommentText={editCommentText}
+            setEditCommentText={setEditCommentText}
+          />
+        ))}
+
+      {!isLoading && (
+        <Pagination
+          currentPage={activePage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          label="Quote pages"
+        />
+      )}
+      </div>
     </div>
   );
 };

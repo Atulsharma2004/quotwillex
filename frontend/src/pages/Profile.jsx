@@ -1,402 +1,712 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   commentQuote,
   deleteComment,
   deleteQuote,
   dislikeQuote,
   editComment,
-  fetchQuotes,
   likeQuote,
   updateQuote,
+  optimisticToggleLike,
+  optimisticToggleDislike,
+  optimisticUpdateQuoteText,
 } from "../redux/quotes/quoteSlice";
-import { FaQuoteLeft } from "react-icons/fa";
-import { FaEdit } from "react-icons/fa";
-import { RiDeleteBin6Fill } from "react-icons/ri";
-import { FaSave } from "react-icons/fa";
+import {
+  syncAuthUser,
+  followUser,
+  unfollowUser,
+  updateProfile,
+  patchFollowingLocal,
+} from "../redux/auth/authSlice";
+import authService from "../redux/auth/authService";
+import quoteService from "../redux/quotes/quoteService";
+import QuoteCard from "../components/QuoteCard";
+import Pagination from "../components/Pagination";
+import ProfileHero from "../components/ProfileHero";
+import FollowListModal from "../components/FollowListModal";
+import EditProfileModal from "../components/EditProfileModal";
+import { ProfileSkeleton } from "../components/Shimmer";
+import Seo from "../components/Seo";
+import {
+  QUOTE_CATEGORIES,
+  OTHER_CATEGORY_VALUE,
+} from "../constants/quoteCategories";
+import { SEO_ROUTES } from "../constants/site";
+import {
+  canonicalProfilePath,
+  profilePath,
+} from "../utils/profileKey";
+import {
+  COMPLETE_PROFILE_DISMISSED,
+  COMPLETE_PROFILE_FLAG,
+  isPrivateProfileIncomplete,
+} from "../utils/profileCompletion";
 
-// import { logout } from "../redux/auth/authSlice";
-// import { useNavigate } from "react-router-dom";
+const PROFILE_QUOTES_PER_PAGE = 3;
+const FOLLOW_LIST_LIMIT = 40;
 
 const Profile = () => {
+  const { profileKey } = useParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
-  const { quotes } = useSelector((state) => state.quotes);
-  // const dispatch = useDispatch();
-  // const navigate = useNavigate();
-  // const [newQuote, setNewQuote] = useState("");
-  // const [commentText, setCommentText] = useState("");
+  const { user: currentUser } = useSelector((state) => state.auth);
 
-  // State for editing mode
+  const [viewedProfile, setViewedProfile] = useState(null);
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [postsMeta, setPostsMeta] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState("");
+  const [modalType, setModalType] = useState(null);
+  const [modalUsers, setModalUsers] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [requireUsername, setRequireUsername] = useState(false);
+  const [showCompleteBanner, setShowCompleteBanner] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+
   const [editQuoteId, setEditQuoteId] = useState(null);
   const [editText, setEditText] = useState("");
-
-  const [localQuotes, setLocalQuotes] = useState([]);
-
-  const [commentText, setCommentText] = useState("");
-  const [visibleComments, setVisibleComments] = useState({});
-
+  const [editCategory, setEditCategory] = useState("");
+  const [editCustomCategory, setEditCustomCategory] = useState("");
   const [editCommentId, setEditCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const isOwnRoute = !profileKey;
+  const profileLookupKey = profileKey
+    ? decodeURIComponent(profileKey)
+    : null;
+  const isOwnProfile =
+    isOwnRoute ||
+    (!!viewedProfile &&
+      !!currentUser &&
+      viewedProfile._id?.toString() === currentUser._id?.toString());
+  const profileTargetKey = isOwnProfile
+    ? null
+    : viewedProfile?.profileKey ||
+      (viewedProfile?.username
+        ? `@${viewedProfile.username}`
+        : profileLookupKey);
+
+  const loadViewedProfile = async ({
+    silent = false,
+    page = currentPage,
+  } = {}) => {
+    if (!currentUser) return;
+    if (!silent) {
+      setProfileLoading(true);
+      setProfileError("");
+    }
+
+    try {
+      const params = { page, limit: PROFILE_QUOTES_PER_PAGE };
+      const profile = isOwnRoute
+        ? await authService.getProfile(params)
+        : await authService.getUserById(profileLookupKey, params);
+
+      setViewedProfile(profile);
+      setProfilePosts(profile.posts || profile.postsPagination?.quotes || []);
+      setPostsMeta(
+        profile.postsPagination || {
+          page: 1,
+          totalPages: 1,
+          total: (profile.posts || []).length,
+        }
+      );
+
+      if (profile.isOwnProfile || isOwnRoute) {
+        // Reuse loaded profile — avoid a second /users/profile round-trip.
+        dispatch(syncAuthUser(profile));
+        const needsUsername =
+          !profile.username ||
+          profile.needsUsername ||
+          searchParams.get("setup") === "1";
+        const needsComplete =
+          searchParams.get("complete") === "1" ||
+          localStorage.getItem(COMPLETE_PROFILE_FLAG) === "1";
+
+        if (needsUsername) {
+          setRequireUsername(true);
+          setShowEditProfile(true);
+        } else if (needsComplete) {
+          setRequireUsername(false);
+          const dismissed =
+            localStorage.getItem(COMPLETE_PROFILE_DISMISSED) === "1";
+          if (!dismissed) setShowCompleteBanner(true);
+          if (searchParams.get("complete") === "1") {
+            navigate("/profile", { replace: true });
+          }
+        }
+      }
+
+      const canonical = canonicalProfilePath(profile, currentUser?._id);
+      const currentPath = isOwnRoute
+        ? "/profile"
+        : `/profile/${profileLookupKey}`;
+      if (canonical !== currentPath) {
+        navigate(canonical, { replace: true });
+      }
+    } catch (error) {
+      if (!silent) {
+        setProfileError(
+          error.response?.data?.message ||
+            error.response?.data?.error ||
+            "Failed to load profile"
+        );
+        setViewedProfile(null);
+        setProfilePosts([]);
+      }
+    } finally {
+      if (!silent) setProfileLoading(false);
+    }
+  };
 
   useEffect(() => {
-    dispatch(fetchQuotes()); // Fetch quotes when profile loads
-  }, [dispatch]);
+    setCurrentPage(1);
+    setViewedProfile(null);
+    setProfilePosts([]);
+    setPostsMeta(null);
+    setProfileError("");
+    setModalType(null);
+  }, [profileLookupKey]);
 
   useEffect(() => {
-    setLocalQuotes(quotes); // Sync state with fetched quotes
-  }, [quotes]);
+    loadViewedProfile({ page: currentPage });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch, profileLookupKey, currentUser?._id, currentPage]);
+
+  useEffect(() => {
+    if (!modalType || !viewedProfile?._id) {
+      setModalUsers([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadFollowList = async () => {
+      setModalLoading(true);
+      try {
+        const payload =
+          modalType === "followers"
+            ? await quoteService.getFollowers(profileTargetKey, {
+                page: 1,
+                limit: FOLLOW_LIST_LIMIT,
+              })
+            : await quoteService.getFollowing(profileTargetKey, {
+                page: 1,
+                limit: FOLLOW_LIST_LIMIT,
+              });
+        if (!cancelled) {
+          setModalUsers(payload.users || []);
+        }
+      } catch {
+        if (!cancelled) setModalUsers([]);
+      } finally {
+        if (!cancelled) setModalLoading(false);
+      }
+    };
+
+    loadFollowList();
+    return () => {
+      cancelled = true;
+    };
+  }, [modalType, viewedProfile?._id, profileTargetKey]);
+
+  const totalPages = Math.max(1, postsMeta?.totalPages || 1);
+  const activePage = Math.min(currentPage, totalPages);
+  const paginatedQuotes = profilePosts;
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const userSnapshot = currentUser
+    ? {
+        _id: currentUser._id,
+        name: currentUser.name,
+        profilePicture: currentUser.profilePicture,
+      }
+    : null;
 
   const handleEditClick = (quote) => {
     setEditQuoteId(quote._id);
     setEditText(quote.text);
+    const known = QUOTE_CATEGORIES.includes(quote.category);
+    setEditCategory(
+      known ? quote.category || "" : quote.category ? OTHER_CATEGORY_VALUE : ""
+    );
+    setEditCustomCategory(known ? "" : quote.category || "");
   };
 
-  // const handleSaveClick = async (id) => {
-  //   if (editText.trim()) {
-  //     const action = await dispatch(updateQuote({ id, text: editText }));
-  //     if (action.payload) {
-  //       setLocalQuotes(
-  //         localQuotes.map((q) => (q._id === id ? { ...q, text: editText } : q))
-  //       ); // Update quote in local state
-  //     }
-  //     setEditQuoteId(null); // Exit edit mode
-  //   }
-  // };
-  const handleSaveClick = async (id) => {
-    if (editText.trim()) {
-      await dispatch(updateQuote({ id, text: editText }));
-      dispatch(fetchQuotes()); // Re-fetch updated quotes
-      setEditQuoteId(null);
+  const handleSaveClick = (id) => {
+    if (!editText.trim()) return;
+    if (editCategory === OTHER_CATEGORY_VALUE && !editCustomCategory.trim()) {
+      return;
     }
+    const text = editText.trim();
+    const category =
+      editCategory === OTHER_CATEGORY_VALUE
+        ? editCustomCategory.trim().toLowerCase()
+        : editCategory;
+    dispatch(optimisticUpdateQuoteText({ id, text, category }));
+    setProfilePosts((prev) =>
+      prev.map((q) => (q._id === id ? { ...q, text, category } : q))
+    );
+    setEditQuoteId(null);
+    dispatch(updateQuote({ id, text, category })).then((action) => {
+      if (updateQuote.rejected.match(action)) {
+        loadViewedProfile({ silent: true, page: currentPage });
+      }
+    });
   };
 
-  const handleDelete = async (id) => {
-    await dispatch(deleteQuote(id));
-    setLocalQuotes(localQuotes.filter((q) => q._id !== id)); // Remove quote dynamically
+  const handleDelete = (id) => {
+    dispatch(deleteQuote(id)).then((action) => {
+      if (deleteQuote.fulfilled.match(action)) {
+        setProfilePosts((prev) => prev.filter((q) => q._id !== id));
+        setViewedProfile((prev) =>
+          prev
+            ? {
+                ...prev,
+                postCount: Math.max(0, (prev.postCount || 1) - 1),
+              }
+            : prev
+        );
+      }
+    });
   };
 
-  const handleLike = async (id) => {
-    const action = await dispatch(likeQuote(id));
-    if (action.payload) {
-      setLocalQuotes(
-        localQuotes.map((q) =>
-          q._id === id ? { ...q, likes: action.payload.likes } : q
-        )
-      );
-    }
+  const handleLike = (id) => {
+    if (!currentUser) return;
+    dispatch(
+      optimisticToggleLike({
+        quoteId: id,
+        userId: currentUser._id,
+        userSnapshot,
+      })
+    );
+    setProfilePosts((prev) =>
+      prev.map((q) => {
+        if (q._id !== id) return q;
+        const liked = q.likedByMe;
+        return {
+          ...q,
+          likedByMe: !liked,
+          dislikedByMe: false,
+          likesCount: Math.max(0, (q.likesCount || 0) + (liked ? -1 : 1)),
+          dislikesCount: q.dislikedByMe
+            ? Math.max(0, (q.dislikesCount || 0) - 1)
+            : q.dislikesCount || 0,
+        };
+      })
+    );
+    dispatch(likeQuote(id)).then((action) => {
+      if (likeQuote.rejected.match(action)) {
+        loadViewedProfile({ silent: true, page: currentPage });
+      }
+    });
   };
 
-  const handleDislike = async (id) => {
-    const action = await dispatch(dislikeQuote(id));
-    if (action.payload) {
-      setLocalQuotes(
-        localQuotes.map((q) =>
-          q._id === id ? { ...q, dislikes: action.payload.dislikes } : q
-        )
-      );
-    }
+  const handleDislike = (id) => {
+    if (!currentUser) return;
+    dispatch(
+      optimisticToggleDislike({
+        quoteId: id,
+        userId: currentUser._id,
+        userSnapshot,
+      })
+    );
+    setProfilePosts((prev) =>
+      prev.map((q) => {
+        if (q._id !== id) return q;
+        const disliked = q.dislikedByMe;
+        return {
+          ...q,
+          dislikedByMe: !disliked,
+          likedByMe: false,
+          dislikesCount: Math.max(
+            0,
+            (q.dislikesCount || 0) + (disliked ? -1 : 1)
+          ),
+          likesCount: q.likedByMe
+            ? Math.max(0, (q.likesCount || 0) - 1)
+            : q.likesCount || 0,
+        };
+      })
+    );
+    dispatch(dislikeQuote(id)).then((action) => {
+      if (dislikeQuote.rejected.match(action)) {
+        loadViewedProfile({ silent: true, page: currentPage });
+      }
+    });
   };
 
-  const handleCommentSubmit = async (quoteId) => {
-    if (commentText.trim()) {
-      await dispatch(commentQuote({ id: quoteId, text: commentText }));
-      setCommentText("");
-    }
+  const handleComment = (quoteId, text) => {
+    dispatch(commentQuote({ id: quoteId, text })).then((action) => {
+      if (commentQuote.fulfilled.match(action)) {
+        loadViewedProfile({ silent: true, page: currentPage });
+      }
+    });
   };
 
-  // Handle Load More Comments
-  const handleLoadMoreComments = (quoteId) => {
-    setVisibleComments((prev) => ({
-      ...prev,
-      [quoteId]: (prev[quoteId] || 3) + 3, // Load 3 more comments
-    }));
-  };
-
-  // Handle edit comment
   const handleEditComment = (comment) => {
     setEditCommentId(comment._id);
     setEditCommentText(comment.text);
   };
 
-  // Handle save edited comment
   const handleSaveComment = async (quoteId, commentId) => {
-    if (editCommentText.trim()) {
-      const action = await dispatch(
-        editComment({ quoteId, commentId, text: editCommentText })
-      );
-      if (action.payload) {
-        setLocalQuotes((prevQuotes) =>
-          prevQuotes.map((quote) =>
-            quote._id === quoteId ? action.payload : quote
-          )
-        );
+    if (!editCommentText.trim()) return;
+    await dispatch(
+      editComment({ quoteId, commentId, text: editCommentText.trim() })
+    );
+    setEditCommentId(null);
+    loadViewedProfile({ silent: true, page: currentPage });
+  };
+
+  const handleDeleteComment = (quoteId, commentId) => {
+    dispatch(deleteComment({ quoteId, commentId })).then(() => {
+      loadViewedProfile({ silent: true, page: currentPage });
+    });
+  };
+
+  const applyOptimisticFollow = (targetId, willFollow, targetSnapshot) => {
+    dispatch(
+      patchFollowingLocal({
+        targetId,
+        following: willFollow,
+        targetSnapshot,
+      })
+    );
+
+    setViewedProfile((prev) => {
+      if (!prev) return prev;
+
+      if (prev._id?.toString() === targetId.toString()) {
+        return {
+          ...prev,
+          isFollowing: willFollow,
+          followerCount: Math.max(
+            0,
+            (prev.followerCount || 0) + (willFollow ? 1 : -1)
+          ),
+        };
       }
-      setEditCommentId(null);
+
+      if (prev._id?.toString() === currentUser._id?.toString()) {
+        return {
+          ...prev,
+          followingCount: Math.max(
+            0,
+            (prev.followingCount || 0) + (willFollow ? 1 : -1)
+          ),
+        };
+      }
+
+      return prev;
+    });
+
+    setModalUsers((prev) => {
+      if (!willFollow && modalType === "following" && isOwnProfile) {
+        return prev.filter((u) => u._id?.toString() !== targetId.toString());
+      }
+      if (
+        willFollow &&
+        modalType === "following" &&
+        isOwnProfile &&
+        targetSnapshot
+      ) {
+        const exists = prev.some(
+          (u) => u._id?.toString() === targetId.toString()
+        );
+        return exists ? prev : [...prev, targetSnapshot];
+      }
+      return prev;
+    });
+  };
+
+  const handleFollowToggleProfile = () => {
+    if (!viewedProfile?._id || isOwnProfile) return;
+    const currentlyFollowing = !!viewedProfile.isFollowing;
+    const willFollow = !currentlyFollowing;
+    const targetId = viewedProfile._id;
+
+    applyOptimisticFollow(targetId, willFollow, {
+      _id: viewedProfile._id,
+      name: viewedProfile.name,
+      profilePicture: viewedProfile.profilePicture,
+    });
+
+    const action = currentlyFollowing
+      ? unfollowUser(targetId)
+      : followUser(targetId);
+
+    dispatch(action).then((result) => {
+      if (
+        followUser.rejected.match(result) ||
+        unfollowUser.rejected.match(result)
+      ) {
+        applyOptimisticFollow(targetId, currentlyFollowing, {
+          _id: viewedProfile._id,
+          name: viewedProfile.name,
+          profilePicture: viewedProfile.profilePicture,
+        });
+      }
+    });
+  };
+
+  const handleFollowToggleInModal = (personId, currentlyFollowing) => {
+    const willFollow = !currentlyFollowing;
+    const person = modalUsers.find(
+      (u) => u._id?.toString() === personId.toString()
+    );
+
+    setBusyId(personId);
+    applyOptimisticFollow(personId, willFollow, person);
+
+    const action = currentlyFollowing
+      ? unfollowUser(personId)
+      : followUser(personId);
+
+    dispatch(action).then((result) => {
+      setBusyId(null);
+      if (
+        followUser.rejected.match(result) ||
+        unfollowUser.rejected.match(result)
+      ) {
+        applyOptimisticFollow(personId, currentlyFollowing, person);
+      }
+    });
+  };
+
+  const handleSelectUser = (personOrId) => {
+    setModalType(null);
+    const person =
+      typeof personOrId === "object" && personOrId
+        ? personOrId
+        : { _id: personOrId };
+    navigate(profilePath(person, currentUser?._id));
+  };
+
+  const handleSaveProfile = async (data) => {
+    setSavingProfile(true);
+    setViewedProfile((prev) => (prev ? { ...prev, ...data } : prev));
+    try {
+      const updated = await dispatch(updateProfile(data)).unwrap();
+      setViewedProfile((prev) => (prev ? { ...prev, ...updated } : updated));
+      setRequireUsername(false);
+      setShowEditProfile(false);
+      setShowCompleteBanner(false);
+      localStorage.removeItem(COMPLETE_PROFILE_FLAG);
+      localStorage.removeItem(COMPLETE_PROFILE_DISMISSED);
+
+      const wasSetup = searchParams.get("setup") === "1";
+      const wasComplete = searchParams.get("complete") === "1";
+      const stillNeedsDetails = isPrivateProfileIncomplete(updated);
+
+      if (wasSetup && stillNeedsDetails) {
+        localStorage.setItem(COMPLETE_PROFILE_FLAG, "1");
+        setShowCompleteBanner(true);
+        navigate("/profile", { replace: true });
+        return;
+      }
+
+      if (wasSetup || wasComplete) {
+        navigate("/", { replace: true });
+        return;
+      }
+    } catch (err) {
+      await loadViewedProfile({ silent: true });
+      const message =
+        (typeof err === "object" && err?.message) ||
+        (typeof err === "string" ? err : null) ||
+        "Could not save profile";
+      const error = new Error(message);
+      error.status = typeof err === "object" ? err?.status : undefined;
+      error.payload = err;
+      throw error;
+    } finally {
+      setSavingProfile(false);
     }
   };
 
-  // Handle delete comment
-  const handleDeleteComment = async (quoteId, commentId) => {
-    await dispatch(deleteComment({ quoteId, commentId }));
-    setLocalQuotes((prevQuotes) =>
-      prevQuotes.map((quote) =>
-        quote._id === quoteId
-          ? {
-              ...quote,
-              comments: quote.comments.filter((c) => c._id !== commentId),
-            }
-          : quote
-      )
+  if (!currentUser) {
+    return (
+      <p className="p-4 text-center">Please login to view your profile.</p>
     );
-  };
+  }
 
-  const postCount = quotes.filter(
-    (post) => post.author._id === user._id
-  ).length;
+  if (profileLoading) {
+    return <ProfileSkeleton />;
+  }
 
-  if (!user) return <p>Please login to view your profile.</p>;
+  if (profileError || !viewedProfile) {
+    return (
+      <div className="p-10 text-center">
+        <p className="text-red-600 mb-4">
+          {profileError || "Profile not found"}
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/profile")}
+          className="text-blue-600 font-semibold"
+        >
+          Back to your profile
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="image-area bg-gray-200 px-12 w-3/4 py-8 flex justify-center mx-auto mt-2">
-        <div className="flex flex-col justify-center items-center">
-          <img
-            src={
-              user.profilePicture ||
-              "https://static-00.iconduck.com/assets.00/user-icon-1024x1024-dtzturco.png"
-            }
-            alt="Profile"
-            style={{ borderRadius: "50%", width: "100px", height: "100px" }}
-            className="mb-2 flex items-center justify-center"
+    <div className="max-w-3xl mx-auto px-4 py-8">
+      <Seo
+        {...SEO_ROUTES.profile}
+        title={
+          viewedProfile?.name
+            ? `${viewedProfile.name} | Quotwellix Profile`
+            : SEO_ROUTES.profile.title
+        }
+      />
+      <ProfileHero
+        profile={viewedProfile}
+        postCount={
+          viewedProfile.postCount ??
+          postsMeta?.total ??
+          profilePosts.length
+        }
+        isOwnProfile={isOwnProfile}
+        isFollowing={!!viewedProfile.isFollowing}
+        onOpenSettings={() => setShowEditProfile(true)}
+        onFollowToggle={handleFollowToggleProfile}
+        onOpenFollowers={() => setModalType("followers")}
+        onOpenFollowing={() => setModalType("following")}
+      />
+
+      {isOwnProfile && showCompleteBanner && (
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-indigo-900 dark:bg-indigo-950/40">
+          <div>
+            <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-200">
+              Finish your private profile details
+            </p>
+            <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+              Optional — helps recovery and account safety. You can skip anytime.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditProfile(true)}
+              className="rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              Complete now
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem(COMPLETE_PROFILE_DISMISSED, "1");
+                localStorage.removeItem(COMPLETE_PROFILE_FLAG);
+                setShowCompleteBanner(false);
+              }}
+              className="rounded-full border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:border-indigo-800 dark:text-indigo-300"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-8 space-y-4">
+        {paginatedQuotes.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/40">
+            <p className="text-gray-500 dark:text-slate-400">No quotes yet.</p>
+            {isOwnProfile && (
+              <Link
+                to="/quotes#compose"
+                className="mt-4 inline-flex rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Post your first quote
+              </Link>
+            )}
+          </div>
+        ) : (
+          paginatedQuotes.map((quote) => (
+            <QuoteCard
+              key={quote._id}
+              quote={quote}
+              user={currentUser}
+              onLike={handleLike}
+              onDislike={handleDislike}
+              onComment={handleComment}
+              onDelete={handleDelete}
+              onEdit={handleEditClick}
+              onSave={handleSaveClick}
+              onEditComment={handleEditComment}
+              onSaveComment={handleSaveComment}
+              onDeleteComment={handleDeleteComment}
+              onFollowToggle={(id, currentlyFollowing, person) =>
+                handleFollowToggleInModal(id, currentlyFollowing)
+              }
+              editQuoteId={editQuoteId}
+              editText={editText}
+              setEditText={setEditText}
+              editCategory={editCategory}
+              setEditCategory={setEditCategory}
+              editCustomCategory={editCustomCategory}
+              setEditCustomCategory={setEditCustomCategory}
+              editCommentId={editCommentId}
+              editCommentText={editCommentText}
+              setEditCommentText={setEditCommentText}
+            />
+          ))
+        )}
+
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={activePage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            label="Profile quote pages"
           />
-          <h2>
-            {user.name}
-            {user.role}
-          </h2>
-          <p>Email: {user.email}</p>
-          <p>Bio: {user.bio || "No bio available"}</p>
-        </div>
-        <div className="flex flex-row  gap-12 mt-6 ml-12">
-          <h3>Posts: {postCount || 0}</h3>
-          <h3>Followers: ({user.followers.length})</h3>
-          {/* <ul>
-        {user.followers.length > 0 ? (
-          user.followers.map((follower) => <li key={follower.email}>{follower.name}</li>)
-        ) : (
-          <p>No followers</p>
         )}
-      </ul> */}
-          <h3>Following: ({user.following.length})</h3>
-          {/* <ul>
-        {user.following.length > 0 ? (
-          user.following.map((follow) => <li key={follow.email}>{follow.name}</li>)
-        ) : (
-          <p>Not following anyone</p>
-        )}
-      </ul> */}
-        </div>
       </div>
-      <div className="post-area">
-        <h3 className="text-xl font-bold mb-4 mt-8 mx-auto w-3/4">
-          Quotes by {user.name}
-        </h3>
-        <ul>
-          {quotes.length > 0 ? (
-            quotes
-              .filter((quote) => quote.author._id === user._id)
-              .map((quote, index) => (
-                <li key={index}>
-                  <div className="border px-4 py-2 my-2 w-3/4 mx-auto  rounded-lg">
-                    <div className="header-quote-post   px-2 py-1">
-                      <div className="owner-detail flex items-center gap-2   rounded-md px-2 py-2">
-                        <img
-                          src={quote.author.profilePicture}
-                          alt="owner-pic"
-                          className="w-10 h-10 rounded-full"
-                        />
-                        <div className="author-name">
-                          <p className="font-bold">{quote.author.name}</p>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="min-h-[300px] bg-[url('https://hbr.org/resources/images/article_assets/2018/08/R1805D_CHIN.jpg')] flex items-center justify-center">
-                      <div className="w-2/3 bg-white border border-2 mx-auto shadow-xl px-4 py-4 rounded-md">
-                        <p className="text-xl mb-1 font-bold text-blue-600">
-                          <FaQuoteLeft />
-                        </p>
-                        {editQuoteId === quote._id ? (
-                          <input
-                            type="text"
-                            className="w-full border p-2 rounded-md"
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                          />
-                        ) : (
-                          <p className="text-xl italic">{quote.text}</p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between px-2 py-1 mt-2">
-                      <div className="flex gap-2">
-                        <button
-                          className="flex"
-                          onClick={() => handleLike(quote._id)}
-                        >
-                          <span>👍</span> <span>{quote.likes.length}</span>
-                        </button>
-                        <button
-                          className="flex"
-                          onClick={() => handleDislike(quote._id)}
-                        >
-                          <span>👎</span> <span>{quote.dislikes.length}</span>
-                        </button>
-                      </div>
-                      <div className="edit-delete-button flex gap-4">
-                        {/* Only show Edit/Delete buttons if the user is the author or an admin */}
-                        {(user?._id === quote.author._id ||
-                          user?.role === "admin") && (
-                          <>
-                            {editQuoteId === quote._id ? (
-                              <button
-                                className="bg-green-500 text-white px-4 py-1  rounded-lg"
-                                onClick={() => handleSaveClick(quote._id)}
-                              >
-                                <FaSave />
-                              </button>
-                            ) : (
-                              <button
-                                className="bg-blue-500 text-white px-4 py-1 rounded-lg"
-                                onClick={() => handleEditClick(quote)}
-                              >
-                                <FaEdit />
-                              </button>
-                            )}
-                            <button
-                              className="bg-red-500 text-white  px-4 py-1 rounded-lg"
-                              onClick={() => handleDelete(quote._id)}
-                            >
-                              <RiDeleteBin6Fill />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
+      {modalType && (
+        <FollowListModal
+          title={
+            modalType === "followers" ? "Followers" : "Following"
+          }
+          users={modalUsers}
+          loading={modalLoading}
+          currentUser={currentUser}
+          onClose={() => setModalType(null)}
+          onSelectUser={handleSelectUser}
+          onFollowToggle={handleFollowToggleInModal}
+          busyId={busyId}
+        />
+      )}
 
-                    {/* Comment Section */}
-                    <div className="mt-4">
-                      <input
-                        type="text"
-                        placeholder="Add a comment..."
-                        value={commentText}
-                        onChange={(e) => setCommentText(e.target.value)}
-                        className="border p-2 w-full rounded-md"
-                      />
-                      <button
-                        onClick={() => handleCommentSubmit(quote._id)}
-                        className="bg-blue-500 text-white px-4 py-2 rounded-md mt-2"
-                      >
-                        Comment
-                      </button>
-
-                      {/* Display Comments */}
-                      <div className="mt-4">
-                        {quote.comments
-                          .slice(0, visibleComments[quote._id] || 1)
-                          .map((comment) => (
-                            <div
-                              key={comment._id}
-                              className="flex  justify-between gap-2 p-2 border rounded-md"
-                            >
-                              <div className="flex gap-2 items-center">
-                                <div className="">
-                                  <img
-                                    src={comment.user.profilePicture}
-                                    alt="User"
-                                    className="w-8 h-8 rounded-full"
-                                  />
-                                </div>
-                                <div className="">
-                                  <p className="font-bold">
-                                    {comment.user.name}
-                                  </p>
-                                  {editCommentId === comment._id ? (
-                                    <input
-                                      type="text"
-                                      className="border p-2 rounded-md w-full"
-                                      value={editCommentText}
-                                      onChange={(e) =>
-                                        setEditCommentText(e.target.value)
-                                      }
-                                    />
-                                  ) : (
-                                    <p>{comment.text}</p>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Edit and Delete buttons for comment */}
-
-                              {(user?._id === comment.user._id ||
-                                user?.role === "admin") && (
-                                <div className="flex gap-6">
-                                  {editCommentId === comment._id ? (
-                                    <button
-                                      onClick={() =>
-                                        handleSaveComment(
-                                          quote._id,
-                                          comment._id
-                                        )
-                                      }
-                                      className="text-green-500 text-xl font-bold"
-                                    >
-                                      <FaSave />
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => handleEditComment(comment)}
-                                      className="text-blue-500 text-xl font-bold"
-                                    >
-                                      <FaEdit />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() =>
-                                      handleDeleteComment(
-                                        quote._id,
-                                        comment._id
-                                      )
-                                    }
-                                    className="text-red-500 text-xl font-bold"
-                                  >
-                                    <RiDeleteBin6Fill />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-
-                        {/* Load More Comments Button */}
-                        {quote.comments.length >
-                          (visibleComments[quote._id] || 1) && (
-                          <button
-                            onClick={() => handleLoadMoreComments(quote._id)}
-                            className="text-blue-500 mt-2"
-                          >
-                            Load More Comments
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))
-          ) : (
-            <p>No quotes available.</p>
-          )}
-        </ul>
-      </div>
+      {showEditProfile && isOwnProfile && (
+        <EditProfileModal
+          profile={viewedProfile}
+          onClose={() => {
+            if (requireUsername) return;
+            if (searchParams.get("complete") === "1") {
+              localStorage.setItem(COMPLETE_PROFILE_DISMISSED, "1");
+              localStorage.removeItem(COMPLETE_PROFILE_FLAG);
+              setShowCompleteBanner(false);
+              setShowEditProfile(false);
+              navigate("/profile", { replace: true });
+              return;
+            }
+            setShowEditProfile(false);
+          }}
+          onSave={handleSaveProfile}
+          isSaving={savingProfile}
+          requireUsername={requireUsername || !viewedProfile.username}
+        />
+      )}
     </div>
   );
 };

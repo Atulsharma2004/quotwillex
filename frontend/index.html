@@ -2,9 +2,99 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <title>Quotwellix — Words that linger.</title>
+    <meta
+      name="description"
+      content="Quotwellix is a social quotes platform to discover daily inspiration, share wisdom, explore popular classics, and connect with people who love meaningful words — in English and Hindi."
+    />
+    <meta
+      name="keywords"
+      content="Quotwellix, quotes, inspirational quotes, motivational quotes, daily quotes, quote of the day, famous quotes, Hindi quotes, wisdom quotes, share quotes"
+    />
+    <meta name="author" content="Quotwellix" />
+    <meta
+      name="robots"
+      content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+    />
+    <meta name="theme-color" content="#1A2E44" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="canonical" href="__SITE_URL__/" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Quotwellix" />
+    <meta property="og:title" content="Quotwellix — Words that linger." />
+    <meta
+      property="og:description"
+      content="Discover quote of the day, popular classics, and a community of shared wisdom on Quotwellix."
+    />
+    <meta property="og:url" content="__SITE_URL__/" />
+    <meta property="og:image" content="__SITE_URL__/og-cover.png" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="hi_IN" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Quotwellix — Words that linger." />
+    <meta
+      name="twitter:description"
+      content="Discover quote of the day, popular classics, and a community of shared wisdom on Quotwellix."
+    />
+    <meta name="twitter:image" content="__SITE_URL__/og-cover.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Quotwellix",
+        "alternateName": "Quotwellix Quotes",
+        "url": "__SITE_URL__/",
+        "description": "Social quotes platform for daily inspiration, popular classics, and community wisdom in English and Hindi.",
+        "inLanguage": ["en", "hi"],
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "__SITE_URL__/popular-quotes?search={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Quotwellix",
+        "url": "__SITE_URL__/",
+        "logo": "__SITE_URL__/quotwellix-logo.png",
+        "description": "Words that linger. Share wisdom and discover timeless quotes.",
+        "email": "quotesupport9@gmail.com",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "email": "quotesupport9@gmail.com",
+          "contactType": "customer support"
+        }
+      }
+    </script>
+
+    <script>
+      (function () {
+        try {
+          var theme =
+            localStorage.getItem("quotwellix-theme") ||
+            localStorage.getItem("quillora-theme") ||
+            localStorage.getItem("quoteapp-theme") ||
+            "system";
+          var dark =
+            theme === "dark" ||
+            (theme === "system" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

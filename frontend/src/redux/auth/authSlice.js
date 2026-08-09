@@ -1,8 +1,16 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import authService from "./authService";
 
+const getStoredUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem("user")) || null;
+  } catch {
+    return null;
+  }
+};
+
 const initialState = {
-  user: JSON.parse(localStorage.getItem("user")) || null,
+  user: getStoredUser(),
   token: localStorage.getItem("token") || null,
   isLoading: false,
   isSuccess: false,
@@ -10,28 +18,106 @@ const initialState = {
   message: "",
 };
 
-// Register User
-export const register = createAsyncThunk("auth/register", async (userData, thunkAPI) => {
-  try {
-    return await authService.register(userData);
-  } catch (error) {
-    return thunkAPI.rejectWithValue(error.response.data.message);
-  }
-});
+const getErrorMessage = (error) =>
+  error.response?.data?.message ||
+  error.response?.data?.error ||
+  error.message ||
+  "Something went wrong";
 
-// Login User
-export const login = createAsyncThunk("auth/login", async (userData, thunkAPI) => {
-  try {
-    return await authService.login(userData);
-  } catch (error) {
-    return thunkAPI.rejectWithValue(error.response.data.message);
+export const register = createAsyncThunk(
+  "auth/register",
+  async (userData, thunkAPI) => {
+    try {
+      return await authService.register(userData);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
   }
-});
+);
 
-// Logout User
+export const login = createAsyncThunk(
+  "auth/login",
+  async (userData, thunkAPI) => {
+    try {
+      return await authService.login(userData);
+    } catch (error) {
+      const payload = {
+        message: getErrorMessage(error),
+        code: error.response?.data?.code,
+        email: error.response?.data?.email,
+      };
+      return thunkAPI.rejectWithValue(payload);
+    }
+  }
+);
+
+/** After Google redirect: exchange one-time code for JWT + profile */
+export const completeOAuthLogin = createAsyncThunk(
+  "auth/completeOAuthLogin",
+  async (code, thunkAPI) => {
+    try {
+      const data = await authService.exchangeOAuthCode(code);
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      return data;
+    } catch (error) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 export const logout = createAsyncThunk("auth/logout", async () => {
   authService.logout();
 });
+
+export const fetchProfile = createAsyncThunk(
+  "auth/fetchProfile",
+  async (params = {}, thunkAPI) => {
+    try {
+      return await authService.getProfile({ lite: 1, ...params });
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const followUser = createAsyncThunk(
+  "auth/followUser",
+  async (userId, thunkAPI) => {
+    try {
+      return await authService.followUser(userId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const unfollowUser = createAsyncThunk(
+  "auth/unfollowUser",
+  async (userId, thunkAPI) => {
+    try {
+      return await authService.unfollowUser(userId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const updateProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (data, thunkAPI) => {
+    try {
+      return await authService.updateProfile(data);
+    } catch (error) {
+      return thunkAPI.rejectWithValue({
+        message: getErrorMessage(error),
+        status: error.response?.status,
+      });
+    }
+  }
+);
 
 const authSlice = createSlice({
   name: "auth",
@@ -43,36 +129,183 @@ const authSlice = createSlice({
       state.isError = false;
       state.message = "";
     },
+    patchFollowingLocal: (state, action) => {
+      const { targetId, following, targetSnapshot } = action.payload;
+      if (!state.user) return;
+
+      const list = state.user.following || [];
+      const idStr = targetId.toString();
+      const exists = list.some(
+        (e) => (e?._id || e)?.toString() === idStr
+      );
+
+      if (following && !exists) {
+        state.user.following = [
+          ...list,
+          targetSnapshot || { _id: targetId },
+        ];
+      } else if (!following && exists) {
+        state.user.following = list.filter(
+          (e) => (e?._id || e)?.toString() !== idStr
+        );
+      }
+      localStorage.setItem("user", JSON.stringify(state.user));
+    },
+    /** Merge auth user from an already-loaded profile (avoids a second API call). */
+    syncAuthUser: (state, action) => {
+      if (!action.payload || !state.user) {
+        if (action.payload) {
+          const slim = { ...action.payload };
+          delete slim.posts;
+          delete slim.postsPagination;
+          state.user = slim;
+          localStorage.setItem("user", JSON.stringify(slim));
+        }
+        return;
+      }
+      const prev = state.user;
+      const next = { ...prev, ...action.payload };
+      delete next.posts;
+      delete next.postsPagination;
+      if (action.payload.following === undefined) {
+        next.following = prev.following;
+      }
+      state.user = next;
+      localStorage.setItem("user", JSON.stringify(next));
+    },
+    setAccessToken: (state, action) => {
+      const token = action.payload;
+      if (!token) return;
+      state.token = token;
+      localStorage.setItem("token", token);
+    },
   },
   extraReducers: (builder) => {
     builder
-    .addCase(register.fulfilled, (state) => {
-      // state.user = action.payload.user;
-      // state.token = action.payload.token;
-      // localStorage.setItem("user", JSON.stringify(action.payload.user));
-      // localStorage.setItem("token", action.payload.token);
-      // state.isSuccess = true; // Ensure it triggers redirection
-
-      state.isSuccess = true;
-      state.user = null; // Ensure no user is stored
-      state.token = null;
-      localStorage.removeItem("user");
-      // localStorage.removeItem("token");
-    })
+      .addCase(register.pending, (state) => {
+        state.isLoading = true;
+        state.isError = false;
+        state.message = "";
+      })
+      .addCase(register.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isSuccess = true;
+        state.isError = false;
+        state.message =
+          action.payload?.message ||
+          (action.payload?.needsEmailVerification
+            ? "Check your email to verify your account."
+            : "");
+        // Complete signup returns token → stay logged in for Home.
+        if (action.payload?.token && action.payload?.user) {
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          localStorage.setItem("user", JSON.stringify(action.payload.user));
+          localStorage.setItem("token", action.payload.token);
+        } else {
+          state.user = null;
+          state.token = null;
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+        }
+      })
+      .addCase(register.rejected, (state, action) => {
+        state.isLoading = false;
+        state.isError = true;
+        state.message = action.payload;
+      })
+      .addCase(login.pending, (state) => {
+        state.isLoading = true;
+        state.isError = false;
+        state.message = "";
+      })
       .addCase(login.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isSuccess = true;
         state.user = action.payload.user;
         state.token = action.payload.token;
         localStorage.setItem("user", JSON.stringify(action.payload.user));
         localStorage.setItem("token", action.payload.token);
       })
+      .addCase(login.rejected, (state, action) => {
+        state.isLoading = false;
+        state.isError = true;
+        state.message =
+          typeof action.payload === "string"
+            ? action.payload
+            : action.payload?.message || "Login failed";
+      })
+      .addCase(completeOAuthLogin.pending, (state) => {
+        state.isLoading = true;
+        state.isError = false;
+        state.message = "";
+      })
+      .addCase(completeOAuthLogin.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isSuccess = true;
+        state.token = action.payload.token;
+        state.user = action.payload.user;
+        localStorage.setItem("token", action.payload.token);
+        localStorage.setItem("user", JSON.stringify(action.payload.user));
+      })
+      .addCase(completeOAuthLogin.rejected, (state, action) => {
+        state.isLoading = false;
+        state.isError = true;
+        state.message = action.payload;
+        state.user = null;
+        state.token = null;
+      })
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
         state.token = null;
+        state.isSuccess = false;
         localStorage.removeItem("user");
         localStorage.removeItem("token");
+      })
+      .addCase(fetchProfile.fulfilled, (state, action) => {
+        const slim = { ...(action.payload || {}) };
+        delete slim.posts;
+        delete slim.postsPagination;
+        if (slim.following === undefined && state.user?.following) {
+          slim.following = state.user.following;
+        }
+        state.user = { ...state.user, ...slim };
+        localStorage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(followUser.fulfilled, (state, action) => {
+        // local patch already applied; keep payload sync optional
+        if (action.payload?.user) {
+          state.user = {
+            ...state.user,
+            ...action.payload.user,
+          };
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+      })
+      .addCase(unfollowUser.fulfilled, (state, action) => {
+        if (action.payload?.user) {
+          state.user = {
+            ...state.user,
+            ...action.payload.user,
+          };
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        const prevFollowing = state.user?.following;
+        state.user = {
+          ...state.user,
+          ...action.payload,
+          following:
+            action.payload?.following !== undefined
+              ? action.payload.following
+              : prevFollowing,
+        };
+        localStorage.setItem("user", JSON.stringify(state.user));
       });
   },
 });
 
-export const { reset } = authSlice.actions;
+export const { reset, patchFollowingLocal, syncAuthUser, setAccessToken } =
+  authSlice.actions;
 export default authSlice.reducer;

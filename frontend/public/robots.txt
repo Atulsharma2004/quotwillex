@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Allow: /popular-quotes
+Allow: /awards
+Allow: /contact
+Allow: /guidelines
+Allow: /signup
+
+Disallow: /login
+Disallow: /auth/
+Disallow: /profile
+Disallow: /quotes
+
+Sitemap: https://quotwellix.com/sitemap.xml
