@@ -1,6 +1,6 @@
 {
   "name": "quotes-backend",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "QuoteApp API — Express + MongoDB backend",
   "main": "server.js",
   "type": "module",
@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "db:wipe": "node jobs/wipeDatabase.js",
+    "db:migrate-popular": "node jobs/migratePopularQuotes.js",
     "moderation:generate": "node data/generateAbusiveWordlist.js"
   },
   "keywords": [

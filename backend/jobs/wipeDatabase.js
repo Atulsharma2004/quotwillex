@@ -12,6 +12,7 @@ const CONFIRM = process.env.CONFIRM_WIPE === "YES";
 const KNOWN_COLLECTIONS = [
   "users",
   "quotes",
+  "popularquotes",
   "follows",
   "comments",
   "quotelikes",

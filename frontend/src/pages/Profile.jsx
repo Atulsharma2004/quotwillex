@@ -75,6 +75,7 @@ const Profile = () => {
   const [editCommentId, setEditCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [postsType, setPostsType] = useState("all"); // all | community | popular
 
   const isOwnRoute = !profileKey;
   const profileLookupKey = profileKey
@@ -104,6 +105,13 @@ const Profile = () => {
 
     try {
       const params = { page, limit: PROFILE_QUOTES_PER_PAGE };
+      if (
+        (isOwnRoute || isOwnProfile) &&
+        currentUser?.role === "admin" &&
+        postsType !== "all"
+      ) {
+        params.postsType = postsType;
+      }
       const profile = isOwnRoute
         ? await authService.getProfile(params)
         : await authService.getUserById(profileLookupKey, params);
@@ -172,12 +180,13 @@ const Profile = () => {
     setPostsMeta(null);
     setProfileError("");
     setModalType(null);
+    setPostsType("all");
   }, [profileLookupKey]);
 
   useEffect(() => {
     loadViewedProfile({ page: currentPage });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, profileLookupKey, currentUser?._id, currentPage]);
+  }, [dispatch, profileLookupKey, currentUser?._id, currentPage, postsType]);
 
   useEffect(() => {
     if (!modalType || !viewedProfile?._id) {
@@ -344,26 +353,36 @@ const Profile = () => {
     });
   };
 
-  const handleComment = (quoteId, text) => {
-    dispatch(commentQuote({ id: quoteId, text })).then((action) => {
-      if (commentQuote.fulfilled.match(action)) {
-        loadViewedProfile({ silent: true, page: currentPage });
-      }
-    });
+  const handleComment = async (quoteId, text, language = "english") => {
+    const action = await dispatch(
+      commentQuote({ id: quoteId, text, language })
+    );
+    if (commentQuote.rejected.match(action)) {
+      throw new Error(action.payload || "Unable to post comment");
+    }
+    await loadViewedProfile({ silent: true, page: currentPage });
   };
 
   const handleEditComment = (comment) => {
+    if (!comment?._id) {
+      setEditCommentId(null);
+      setEditCommentText("");
+      return;
+    }
     setEditCommentId(comment._id);
     setEditCommentText(comment.text);
   };
 
   const handleSaveComment = async (quoteId, commentId) => {
     if (!editCommentText.trim()) return;
-    await dispatch(
+    const action = await dispatch(
       editComment({ quoteId, commentId, text: editCommentText.trim() })
     );
+    if (editComment.rejected.match(action)) {
+      throw new Error(action.payload || "Unable to update comment");
+    }
     setEditCommentId(null);
-    loadViewedProfile({ silent: true, page: currentPage });
+    await loadViewedProfile({ silent: true, page: currentPage });
   };
 
   const handleDeleteComment = (quoteId, commentId) => {
@@ -573,8 +592,9 @@ const Profile = () => {
         profile={viewedProfile}
         postCount={
           viewedProfile.postCount ??
-          postsMeta?.total ??
-          profilePosts.length
+          ((viewedProfile.communityPostCount || 0) +
+            (viewedProfile.popularPostCount || 0) ||
+            profilePosts.length)
         }
         isOwnProfile={isOwnProfile}
         isFollowing={!!viewedProfile.isFollowing}
@@ -618,15 +638,83 @@ const Profile = () => {
       )}
 
       <div className="mt-8 space-y-4">
+        {isOwnProfile &&
+          (currentUser?.role === "admin" || viewedProfile?.canFilterPostTypes) && (
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              {[
+                {
+                  id: "all",
+                  label: "All",
+                  count:
+                    (viewedProfile.communityPostCount || 0) +
+                    (viewedProfile.popularPostCount || 0),
+                },
+                {
+                  id: "community",
+                  label: "My quotes",
+                  count: viewedProfile.communityPostCount || 0,
+                },
+                {
+                  id: "popular",
+                  label: "Popular",
+                  count: viewedProfile.popularPostCount || 0,
+                },
+              ].map((tab) => {
+                const active = postsType === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      if (postsType === tab.id) return;
+                      setPostsType(tab.id);
+                      setCurrentPage(1);
+                    }}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      active
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-gray-50 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                        active
+                          ? "bg-white/20 text-white"
+                          : "bg-gray-200 text-gray-600 dark:bg-slate-700 dark:text-slate-300"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
         {paginatedQuotes.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/40">
-            <p className="text-gray-500 dark:text-slate-400">No quotes yet.</p>
-            {isOwnProfile && (
+            <p className="text-gray-500 dark:text-slate-400">
+              {postsType === "popular"
+                ? "No popular quotes posted yet."
+                : postsType === "community"
+                  ? "No community quotes posted yet."
+                  : "No quotes yet."}
+            </p>
+            {isOwnProfile && postsType !== "popular" && (
               <Link
                 to="/quotes#compose"
                 className="mt-4 inline-flex rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
               >
                 Post your first quote
+              </Link>
+            )}
+            {isOwnProfile && postsType === "popular" && (
+              <Link
+                to="/popular-quotes"
+                className="mt-4 inline-flex rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+              >
+                Publish a popular quote
               </Link>
             )}
           </div>

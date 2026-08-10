@@ -85,6 +85,23 @@ export const createPopularQuote = createAsyncThunk(
   }
 );
 
+export const bulkCreatePopularQuotes = createAsyncThunk(
+  "quotes/bulkCreatePopular",
+  async (quotes, thunkAPI) => {
+    try {
+      return await quoteService.bulkCreatePopularQuotes(quotes);
+    } catch (error) {
+      const data = error.response?.data;
+      if (data && typeof data === "object") {
+        return thunkAPI.rejectWithValue(data);
+      }
+      return thunkAPI.rejectWithValue({
+        error: getErrorMessage(error),
+      });
+    }
+  }
+);
+
 export const updateQuote = createAsyncThunk(
   "quotes/update",
   async (
@@ -146,9 +163,9 @@ export const dislikeQuote = createAsyncThunk(
 
 export const commentQuote = createAsyncThunk(
   "quotes/comment",
-  async ({ id, text }, thunkAPI) => {
+  async ({ id, text, language = "english" }, thunkAPI) => {
     try {
-      return await quoteService.commentQuote(id, text);
+      return await quoteService.commentQuote(id, text, language);
     } catch (error) {
       return thunkAPI.rejectWithValue(getErrorMessage(error));
     }
@@ -325,6 +342,12 @@ const quoteSlice = createSlice({
       })
       .addCase(createPopularQuote.fulfilled, (state, action) => {
         state.popularQuotes.unshift(action.payload);
+      })
+      .addCase(bulkCreatePopularQuotes.fulfilled, (state, action) => {
+        const created = action.payload?.created || [];
+        if (created.length) {
+          state.popularQuotes = [...created, ...state.popularQuotes];
+        }
       })
       .addCase(updateQuote.fulfilled, (state, action) => {
         replaceQuote(state, action.payload);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaQuoteLeft,
@@ -7,6 +7,8 @@ import {
   FaPaperPlane,
   FaRegCommentDots,
   FaChevronDown,
+  FaChevronUp,
+  FaTimes,
 } from "react-icons/fa";
 import { RiDeleteBin6Fill } from "react-icons/ri";
 import {
@@ -15,12 +17,9 @@ import {
   categoryLabel,
 } from "../constants/quoteCategories";
 import { quoteUi } from "../constants/quoteUi";
-import {
-  moderateText,
-  getAbuseRejectionMessage,
-} from "../utils/contentModeration";
 import { profilePath } from "../utils/profileKey";
 import ProfileAvatar from "./ProfileAvatar";
+import FeedbackToast from "./FeedbackToast";
 
 const timeAgo = (date) => {
   if (!date) return "";
@@ -74,7 +73,14 @@ const QuoteCard = ({
   const navigate = useNavigate();
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState("");
-  const [visibleCount, setVisibleCount] = useState(1);
+  const [isCommenting, setIsCommenting] = useState(false);
+  const [isSavingComment, setIsSavingComment] = useState(false);
+  const [toast, setToast] = useState({ message: "", type: "success" });
+  const [visibleCount, setVisibleCount] = useState(2);
+  const [commentsOpen, setCommentsOpen] = useState(true);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [justPostedId, setJustPostedId] = useState(null);
+  const composerRef = useRef(null);
 
   const authorId = quote.author?._id?.toString();
   const userId = user?._id?.toString();
@@ -112,32 +118,76 @@ const QuoteCard = ({
   const dislikesCount = quote.dislikesCount ?? quote.dislikes?.length ?? 0;
   const commentsCount = quote.commentsCount ?? quote.comments?.length ?? 0;
 
+  const cardLanguage = quote.language || "english";
+  const ui = quoteUi(cardLanguage);
+
   const handleCommentSubmit = async () => {
     if (guestMode || !user) {
       askLogin();
       return;
     }
-    if (!commentText.trim()) return;
+    if (isCommenting || !commentText.trim()) return;
+
+    setIsCommenting(true);
+    setCommentError("");
+    const pending = commentText.trim().slice(0, 1000);
     try {
-      const moderation = await moderateText(
-        commentText,
-        quote.language || "english"
-      );
-      if (moderation.blocked) {
-        setCommentError(
-          moderation.message ||
-            getAbuseRejectionMessage(
-              moderation.words,
-              quote.language || "english"
-            )
-        );
-        return;
-      }
-      setCommentError("");
-      onComment(quote._id, commentText.trim());
+      await onComment(quote._id, pending, cardLanguage);
       setCommentText("");
-    } catch {
-      setCommentError("Unable to verify comment right now. Please try again.");
+      setComposerFocused(false);
+      setCommentsOpen(true);
+      setVisibleCount((count) => Math.max(count, commentsCount + 1, 3));
+      setJustPostedId("fresh");
+      setToast({ message: ui.commentSuccess, type: "success" });
+      window.setTimeout(() => setJustPostedId(null), 2200);
+    } catch (error) {
+      setCommentError(
+        error?.message || "Unable to post comment. Please try again."
+      );
+    } finally {
+      setIsCommenting(false);
+    }
+  };
+
+  const goToCommentAuthor = (commentUser) => {
+    if (guestMode || !user) {
+      askLogin();
+      return;
+    }
+    if (!commentUser?._id && !commentUser?.username) return;
+    navigate(profilePath(commentUser, user?._id));
+  };
+
+  useEffect(() => {
+    if (commentsCount > 0 && visibleCount < 2) {
+      setVisibleCount(2);
+    }
+  }, [commentsCount, visibleCount]);
+
+  const COMMENT_MAX = 1000;
+  const charsRemaining = COMMENT_MAX - commentText.length;
+  const visibleComments = (quote.comments || []).slice(0, visibleCount);
+  const hiddenCount = Math.max(0, commentsCount - visibleCount);
+
+  const handleSaveCommentClick = async (commentId) => {
+    if (isSavingComment || !editCommentText?.trim()) return;
+    setIsSavingComment(true);
+    setCommentError("");
+    try {
+      await onSaveComment(quote._id, commentId);
+      setToast({
+        message:
+          cardLanguage === "hindi"
+            ? "कमेंट सफलतापूर्वक अपडेट हो गया!"
+            : "Comment updated successfully!",
+        type: "success",
+      });
+    } catch (error) {
+      setCommentError(
+        error?.message || "Unable to update comment. Please try again."
+      );
+    } finally {
+      setIsSavingComment(false);
     }
   };
 
@@ -149,9 +199,6 @@ const QuoteCard = ({
     if (!quote.author?._id && !quote.author?.username) return;
     navigate(profilePath(quote.author, user?._id));
   };
-
-  const cardLanguage = quote.language || "english";
-  const ui = quoteUi(cardLanguage);
 
   return (
     <div className="border border-blue-100 px-4 py-2 my-2 w-3/4 mx-auto rounded-lg bg-white/80 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
@@ -367,160 +414,309 @@ const QuoteCard = ({
         </div>
       </div>
 
-      <div className="mt-4 border-t border-gray-200 pt-3 dark:border-slate-700">
-        <div className="flex items-center gap-2 mb-3 text-gray-600 dark:text-slate-400">
-          <FaRegCommentDots className="text-indigo-500" />
-          <span className="text-sm font-semibold">
-            {commentsCount}{" "}
-            {commentsCount === 1 ? ui.comment : ui.comments}
+      <div className="mt-4 border-t border-indigo-100/80 pt-3 dark:border-slate-700">
+        <button
+          type="button"
+          onClick={() => setCommentsOpen((open) => !open)}
+          className="mb-3 flex w-full items-center justify-between gap-2 rounded-xl px-1 py-1 text-left transition hover:bg-indigo-50/70 dark:hover:bg-slate-800"
+        >
+          <span className="flex items-center gap-2 text-gray-700 dark:text-slate-300">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">
+              <FaRegCommentDots className="text-sm" />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold">
+                {commentsCount}{" "}
+                {commentsCount === 1 ? ui.comment : ui.comments}
+              </span>
+              <span className="block text-[11px] font-medium text-indigo-500/90 dark:text-indigo-300/80">
+                {ui.joinConversation}
+              </span>
+            </span>
           </span>
-        </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-300">
+            {commentsOpen ? ui.hideComments : ui.showComments}
+            {commentsOpen ? (
+              <FaChevronUp className="text-[9px]" />
+            ) : (
+              <FaChevronDown className="text-[9px]" />
+            )}
+          </span>
+        </button>
 
-        {guestMode || !user ? (
-          <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/60 px-4 py-3 text-center dark:border-indigo-900 dark:bg-indigo-950/30">
-            <p className="text-sm text-indigo-800 dark:text-indigo-200">
-              Sign in to like, comment, or share quotes.
-            </p>
-            <button
-              type="button"
-              onClick={askLogin}
-              className="mt-2 text-sm font-semibold text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-300"
-            >
-              Log in
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-full pl-3 pr-1.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-400 focus-within:border-indigo-300 transition dark:bg-slate-800 dark:border-slate-600 dark:focus-within:ring-indigo-500">
-          <ProfileAvatar
-            src={user?.profilePicture}
-            alt="You"
-            className="w-7 h-7 rounded-full object-cover shrink-0"
-          />
-          <input
-            type="text"
-            placeholder={ui.shareThoughts}
-            value={commentText}
-            onChange={(e) => {
-              setCommentText(e.target.value);
-              if (commentError) setCommentError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleCommentSubmit();
-            }}
-            className="flex-1 min-w-0 bg-transparent outline-none text-sm text-gray-900 placeholder:text-gray-400 dark:text-slate-100 dark:placeholder:text-slate-500"
-          />
-          <button
-            type="button"
-            onClick={handleCommentSubmit}
-            disabled={!commentText.trim()}
-            aria-label={ui.postComment}
-            className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 text-white shadow-sm transition hover:scale-105 hover:shadow-md disabled:opacity-40 disabled:hover:scale-100 disabled:shadow-none"
-          >
-            <FaPaperPlane className="text-xs -translate-x-px" />
-          </button>
-          </div>
-        )}
-        {commentError && (
-          <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/50 dark:text-red-300">
-            {commentError}
-          </p>
-        )}
-
-        <div className="mt-3 space-y-2">
-          {(commentsCount === 0 || (quote.comments || []).length === 0) && (
-            <p className="text-center text-sm text-gray-500 py-3 dark:text-slate-500">
-              {ui.noComments}
-            </p>
-          )}
-
-          {(quote.comments || []).slice(0, visibleCount).map((comment) => {
-            const canManageComment =
-              user?._id === comment.user?._id || user?.role === "admin";
-
-            return (
+        <div className="comment-panel space-y-3">
+            {guestMode || !user ? (
+              <div className="rounded-2xl border border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50 to-blue-50 px-4 py-4 text-center dark:border-indigo-900 dark:from-indigo-950/40 dark:to-slate-900">
+                <p className="text-sm text-indigo-800 dark:text-indigo-200">
+                  Sign in to like, comment, or share quotes.
+                </p>
+                <button
+                  type="button"
+                  onClick={askLogin}
+                  className="mt-2 rounded-full bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Log in
+                </button>
+              </div>
+            ) : (
               <div
-                key={comment._id}
-                className="group flex items-start justify-between gap-2 px-3 py-2.5 rounded-2xl border border-gray-100 bg-gray-50 transition hover:border-indigo-100 hover:bg-indigo-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600 dark:hover:bg-slate-700"
+                className={`rounded-2xl border bg-white p-2.5 shadow-sm transition dark:bg-slate-800 ${
+                  composerFocused
+                    ? "border-indigo-300 ring-4 ring-indigo-100 dark:border-indigo-500 dark:ring-indigo-950/50"
+                    : "border-gray-200 dark:border-slate-600"
+                }`}
               >
-                <div className="flex gap-2.5 items-start min-w-0">
+                <div className="flex items-start gap-2">
                   <ProfileAvatar
-                    src={comment.user?.profilePicture}
-                    alt="User"
-                    className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-gray-200 dark:ring-slate-600"
+                    src={user?.profilePicture}
+                    alt="You"
+                    className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover ring-2 ring-indigo-100 dark:ring-indigo-900"
                   />
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <p className="font-semibold text-sm text-gray-900 dark:text-slate-100">
-                        {comment.user?.username || comment.user?.name}
-                      </p>
-                      {comment.createdAt && (
-                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                          {timeAgo(comment.createdAt)}
-                        </span>
-                      )}
+                  <div className="min-w-0 flex-1">
+                    <textarea
+                      ref={composerRef}
+                      rows={composerFocused || commentText ? 2 : 1}
+                      maxLength={COMMENT_MAX}
+                      placeholder={ui.shareThoughts}
+                      value={commentText}
+                      disabled={isCommenting}
+                      onFocus={() => setComposerFocused(true)}
+                      onBlur={() => {
+                        if (!commentText.trim()) setComposerFocused(false);
+                      }}
+                      onChange={(e) => {
+                        setCommentText(e.target.value.slice(0, COMMENT_MAX));
+                        if (commentError) setCommentError("");
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleCommentSubmit();
+                        }
+                      }}
+                      className="w-full resize-none bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400 disabled:opacity-60 dark:text-slate-100 dark:placeholder:text-slate-500"
+                    />
+                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                      <span
+                        className={`text-[11px] ${
+                          charsRemaining < 40
+                            ? "font-semibold text-amber-600"
+                            : "text-gray-400 dark:text-slate-500"
+                        }`}
+                      >
+                        {composerFocused || commentText
+                          ? ui.charsLeft(charsRemaining)
+                          : "Enter to send · Shift+Enter for new line"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCommentSubmit}
+                        disabled={isCommenting || !commentText.trim()}
+                        aria-label={
+                          isCommenting ? ui.postingComment : ui.postComment
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-600 to-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <FaPaperPlane className="text-[10px]" />
+                        {isCommenting ? ui.postingComment : ui.postComment}
+                      </button>
                     </div>
-                    {editCommentId === comment._id ? (
-                      <input
-                        type="text"
-                        className="border border-gray-300 p-2 rounded-md w-full mt-1 text-sm bg-white text-gray-900 dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100"
-                        value={editCommentText}
-                        onChange={(e) => setEditCommentText(e.target.value)}
-                      />
-                    ) : (
-                      <p className="text-sm text-gray-700 break-words dark:text-slate-300">
-                        {comment.text}
-                      </p>
-                    )}
                   </div>
                 </div>
-
-                {canManageComment && (
-                  <div className="flex gap-2 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
-                    {editCommentId === comment._id ? (
-                      <button
-                        type="button"
-                        onClick={() => onSaveComment(quote._id, comment._id)}
-                        title="Save"
-                        className="w-7 h-7 flex items-center justify-center rounded-full text-green-600 hover:bg-green-100 transition dark:hover:bg-green-900/40"
-                      >
-                        <FaSave className="text-sm" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onEditComment(comment)}
-                        title="Edit"
-                        className="w-7 h-7 flex items-center justify-center rounded-full text-blue-600 hover:bg-blue-100 transition dark:text-blue-400 dark:hover:bg-blue-900/40"
-                      >
-                        <FaEdit className="text-sm" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onDeleteComment(quote._id, comment._id)}
-                      title="Delete"
-                      className="w-7 h-7 flex items-center justify-center rounded-full text-red-500 hover:bg-red-100 transition dark:hover:bg-red-900/40"
-                    >
-                      <RiDeleteBin6Fill className="text-sm" />
-                    </button>
-                  </div>
-                )}
               </div>
-            );
-          })}
+            )}
 
-          {commentsCount > visibleCount && (
-            <button
-              type="button"
-              onClick={() => setVisibleCount((prev) => prev + 1)}
-              className="mx-auto flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-full transition dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/60 dark:hover:text-indigo-200"
-            >
-              {ui.loadMoreComments}
-              <FaChevronDown className="text-[10px]" />
-            </button>
-          )}
+            {commentError && (
+              <p className="rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                {commentError}
+              </p>
+            )}
+
+            {commentsOpen && (
+            <div className="space-y-2">
+              {commentsCount === 0 || (quote.comments || []).length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/80 px-4 py-6 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                  <p className="text-sm text-gray-500 dark:text-slate-400">
+                    {ui.noComments}
+                  </p>
+                </div>
+              ) : (
+                visibleComments.map((comment, index) => {
+                  const canManageComment =
+                    user?._id === comment.user?._id || user?.role === "admin";
+                  const isOwnComment =
+                    userId &&
+                    comment.user?._id?.toString() === userId;
+                  const isNewest =
+                    justPostedId === "fresh" &&
+                    index === visibleComments.length - 1;
+
+                  return (
+                    <div
+                      key={comment._id}
+                      className={`comment-row group relative flex items-start justify-between gap-2 rounded-2xl border px-3 py-2.5 transition ${
+                        isOwnComment
+                          ? "border-indigo-200 bg-indigo-50/70 dark:border-indigo-800 dark:bg-indigo-950/30"
+                          : "border-gray-100 bg-gray-50 hover:border-indigo-100 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:hover:border-slate-600"
+                      } ${isNewest ? "comment-flash" : ""}`}
+                      style={{ animationDelay: `${Math.min(index, 6) * 40}ms` }}
+                    >
+                      {isOwnComment && (
+                        <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-indigo-500" />
+                      )}
+                      <div className="flex min-w-0 items-start gap-2.5 pl-1">
+                        <button
+                          type="button"
+                          onClick={() => goToCommentAuthor(comment.user)}
+                          className="shrink-0 rounded-full transition hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        >
+                          <ProfileAvatar
+                            src={comment.user?.profilePicture}
+                            alt=""
+                            className="h-8 w-8 rounded-full object-cover ring-2 ring-white dark:ring-slate-700"
+                          />
+                        </button>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <button
+                              type="button"
+                              onClick={() => goToCommentAuthor(comment.user)}
+                              className="text-sm font-semibold text-gray-900 hover:text-indigo-600 dark:text-slate-100 dark:hover:text-indigo-300"
+                            >
+                              {comment.user?.username || comment.user?.name}
+                            </button>
+                            {isOwnComment && (
+                              <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                                {ui.youLabel}
+                              </span>
+                            )}
+                            {comment.createdAt && (
+                              <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                                {timeAgo(comment.createdAt)}
+                              </span>
+                            )}
+                          </div>
+                          {editCommentId === comment._id ? (
+                            <div className="mt-1.5 space-y-2">
+                              <input
+                                type="text"
+                                disabled={isSavingComment}
+                                className="w-full rounded-xl border border-indigo-200 bg-white p-2 text-sm text-gray-900 outline-none ring-2 ring-indigo-100 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:ring-indigo-950"
+                                value={editCommentText}
+                                onChange={(e) =>
+                                  setEditCommentText(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleSaveCommentClick(comment._id);
+                                  }
+                                  if (e.key === "Escape") {
+                                    onEditComment?.(null);
+                                  }
+                                }}
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={
+                                    isSavingComment || !editCommentText?.trim()
+                                  }
+                                  onClick={() =>
+                                    handleSaveCommentClick(comment._id)
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                                >
+                                  <FaSave /> Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => onEditComment?.(null)}
+                                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 dark:border-slate-600 dark:text-slate-300"
+                                >
+                                  <FaTimes /> {ui.cancelEdit}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="mt-0.5 text-sm leading-relaxed text-gray-700 break-words dark:text-slate-300">
+                              {comment.text}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {canManageComment && editCommentId !== comment._id && (
+                        <div className="flex shrink-0 gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition">
+                          <button
+                            type="button"
+                            onClick={() => onEditComment(comment)}
+                            title="Edit"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-blue-600 transition hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/40"
+                          >
+                            <FaEdit className="text-sm" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onDeleteComment(quote._id, comment._id)
+                            }
+                            title="Delete"
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-red-500 transition hover:bg-red-100 dark:hover:bg-red-900/40"
+                          >
+                            <RiDeleteBin6Fill className="text-sm" />
+                          </button>
+                        </div>
+                      )}
+                      {canManageComment && editCommentId === comment._id && (
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            disabled={
+                              isSavingComment || !editCommentText?.trim()
+                            }
+                            onClick={() =>
+                              handleSaveCommentClick(comment._id)
+                            }
+                            title={
+                              isSavingComment ? ui.postingComment : "Save"
+                            }
+                            className="flex h-7 w-7 items-center justify-center rounded-full text-green-600 transition hover:bg-green-100 disabled:opacity-40 dark:hover:bg-green-900/40"
+                          >
+                            <FaSave className="text-sm" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleCount((prev) =>
+                      Math.min(prev + 3, Math.max(commentsCount, prev + 3))
+                    )
+                  }
+                  className="mx-auto flex items-center gap-1.5 rounded-full bg-indigo-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/60"
+                >
+                  {ui.loadMoreComments}
+                  <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] dark:bg-indigo-900/60">
+                    +{Math.min(3, hiddenCount)}
+                  </span>
+                  <FaChevronDown className="text-[10px]" />
+                </button>
+              )}
+            </div>
+            )}
         </div>
       </div>
+      <FeedbackToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "success" })}
+      />
     </div>
   );
 };

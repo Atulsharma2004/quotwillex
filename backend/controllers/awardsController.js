@@ -40,7 +40,7 @@ const serializeQuoteAward = (quote, metricCount) => {
     commentsCount: quote.commentsCount || 0,
     metricCount: metricCount ?? 0,
     createdAt: quote.createdAt,
-    isPopular: Boolean(quote.isPopular),
+    isPopular: false,
     author: quote.author
       ? {
           _id: quote.author._id,
@@ -84,7 +84,6 @@ const uniqueAuthorsTopQuotes = (rows, limit = LEADERBOARD_LIMIT) => {
 const loadOverallQuoteBoard = async (metricField) => {
   const authorSelect = `${AUTHOR_SELECT} qotdStars`;
   const filter = {
-    isPopular: { $ne: true },
     [metricField]: { $gt: 0 },
   };
 
@@ -96,7 +95,7 @@ const loadOverallQuoteBoard = async (metricField) => {
     .lean();
 
   if (!quotes.length) {
-    quotes = await Quote.find({ isPopular: { $ne: true } })
+    quotes = await Quote.find({})
       .sort({ [metricField]: -1, createdAt: 1 })
       .limit(60)
       .populate("author", authorSelect)
@@ -135,7 +134,6 @@ const loadTodayQuoteBoard = async (EdgeModel) => {
   const ids = grouped.map((row) => row._id);
   const quotes = await Quote.find({
     _id: { $in: ids },
-    isPopular: { $ne: true },
   })
     .populate("author", authorSelect)
     .lean();
@@ -165,7 +163,6 @@ const loadStarLeaders = async () => {
     {
       $match: {
         usedPopular: { $ne: true },
-        "quoteDoc.isPopular": { $ne: true },
       },
     },
     {

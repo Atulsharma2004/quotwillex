@@ -15,6 +15,7 @@ import {
   PROFILE_IMAGE_HINT,
 } from "../utils/profileImage";
 import LocationFields from "../components/LocationFields";
+import PasswordField from "../components/PasswordField";
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -239,15 +240,16 @@ const Signup = () => {
             className={fieldClass}
           />
           <br />
-          <input
-            type="password"
+          <PasswordField
             name="password"
             placeholder="Password (min 8 characters)"
             required
             minLength={8}
+            autoComplete="new-password"
             value={formData.password}
             onChange={handleChange}
-            className={fieldClass}
+            wrapperClassName="relative mx-auto mb-3 w-3/4"
+            className="px-2 py-1 font-bold text-md rounded-md"
           />
           <br />
           <input

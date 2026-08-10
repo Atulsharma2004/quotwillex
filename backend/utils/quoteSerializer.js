@@ -1,19 +1,26 @@
 import Comment from "../models/Comment.js";
 import Follow from "../models/Follow.js";
 import Quote from "../models/Quote.js";
+import PopularQuote from "../models/PopularQuote.js";
 import QuoteDislike from "../models/QuoteDislike.js";
 import QuoteLike from "../models/QuoteLike.js";
 import User from "../models/User.js";
 import { isPrivateProfileIncomplete } from "./privateProfile.js";
 import { resolveEffectiveRole } from "./adminAccess.js";
+import { withQuoteFlags } from "./quoteDocuments.js";
 
 const AUTHOR_SELECT = "name username profilePicture";
 const USER_CARD_SELECT = "name username profilePicture";
 
 /**
  * Attach viewer reaction flags + latest comments without hydrating full graphs.
+ * Works for both community Quote and PopularQuote documents.
  */
-export const serializeQuotesForViewer = async (quotes, viewerId, options = {}) => {
+export const serializeQuotesForViewer = async (
+  quotes,
+  viewerId,
+  options = {}
+) => {
   const commentLimit = options.commentLimit ?? 5;
   const list = Array.isArray(quotes) ? quotes : [];
   if (!list.length) return [];
@@ -105,15 +112,22 @@ export const serializeQuotesForViewer = async (quotes, viewerId, options = {}) =
     const likedByMe = likedSet.has(id);
     const dislikedByMe = dislikedSet.has(id);
     const followedByMe = authorId ? followedAuthors.has(authorId) : false;
+    const popularFlag =
+      options.kind === "popular"
+        ? true
+        : options.kind === "community"
+          ? false
+          : Boolean(quote.isPopular);
+
+    const normalized = withQuoteFlags(quote, popularFlag);
     return {
-      ...quote,
+      ...normalized,
       likesCount: quote.likesCount || 0,
       dislikesCount: quote.dislikesCount || 0,
       commentsCount: quote.commentsCount || 0,
       likedByMe,
       dislikedByMe,
       followedByMe,
-      // Compat arrays for older UI paths (IDs only, tiny)
       likes: likedByMe && viewer ? [viewer] : [],
       dislikes: dislikedByMe && viewer ? [viewer] : [],
       comments: recent,
@@ -136,9 +150,7 @@ export const buildAuthUserPayload = async (userDoc, options = {}) => {
   delete user.passwordResetExpires;
 
   const skipFollowing = options.skipFollowing === true;
-  const followingIds = skipFollowing
-    ? null
-    : await getFollowingIds(user._id);
+  const followingIds = skipFollowing ? null : await getFollowingIds(user._id);
 
   return {
     ...user,
@@ -147,9 +159,7 @@ export const buildAuthUserPayload = async (userDoc, options = {}) => {
     role: resolveEffectiveRole(user.email),
     followerCount: user.followerCount || 0,
     followingCount:
-      followingIds != null
-        ? followingIds.length
-        : user.followingCount || 0,
+      followingIds != null ? followingIds.length : user.followingCount || 0,
     following: followingIds != null ? followingIds : undefined,
     followers: [],
     needsProfileDetails: isPrivateProfileIncomplete(user),
@@ -167,12 +177,20 @@ export const loadLatestComments = async (quoteId, limit = 20) => {
 };
 
 export const formatQuoteWithAuthor = async (quoteId, viewerId) => {
-  const quote = await Quote.findById(quoteId)
+  let quote = await Quote.findById(quoteId)
     .populate("author", AUTHOR_SELECT)
     .lean();
+  let kind = "community";
+  if (!quote) {
+    quote = await PopularQuote.findById(quoteId)
+      .populate("author", AUTHOR_SELECT)
+      .lean();
+    kind = "popular";
+  }
   if (!quote) return null;
   const [serialized] = await serializeQuotesForViewer([quote], viewerId, {
     commentLimit: 20,
+    kind,
   });
   return serialized;
 };

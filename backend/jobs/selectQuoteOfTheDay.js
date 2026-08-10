@@ -1,6 +1,8 @@
 import Quote from "../models/Quote.js";
+import PopularQuote from "../models/PopularQuote.js";
 import QuoteOfTheDay from "../models/QuoteOfTheDay.js";
 import User from "../models/User.js";
+import { findQuoteDocByIdRaw } from "../utils/quoteDocuments.js";
 
 /** Local calendar day YYYY-MM-DD (matches node-cron local midnight). */
 const toDayKey = (date = new Date()) => {
@@ -43,14 +45,10 @@ const loadQuotesForDay = async (dayKey, { popularOnly = false } = {}) => {
   const filter = {
     createdAt: { $gte: start, $lte: end },
   };
-  if (popularOnly) {
-    filter.isPopular = true;
-  } else {
-    filter.isPopular = { $ne: true };
-  }
-  return Quote.find(filter)
+  const Model = popularOnly ? PopularQuote : Quote;
+  return Model.find(filter)
     .select(
-      "text likesCount dislikesCount commentsCount category language createdAt author isPopular"
+      "text likesCount dislikesCount commentsCount category language createdAt author attributedTo"
     )
     .lean();
 };
@@ -60,7 +58,6 @@ const findLatestCommunityDay = async (beforeDayKey) => {
   const before = dayBounds(beforeDayKey).start;
   const latest = await Quote.findOne({
     createdAt: { $lt: before },
-    isPopular: { $ne: true },
   })
     .sort({ createdAt: -1 })
     .select("createdAt")
@@ -71,7 +68,7 @@ const findLatestCommunityDay = async (beforeDayKey) => {
 };
 
 /**
- * True when there are zero community (non-popular) posts in the last 3
+ * True when there are zero community posts in the last 3
  * calendar days ending yesterday (relative to the display day).
  */
 const hasNoCommunityPostsInLast3Days = async (displayDayKey) => {
@@ -79,21 +76,19 @@ const hasNoCommunityPostsInLast3Days = async (displayDayKey) => {
   const rangeEnd = dayBounds(previousDayKey(displayDayKey)).end;
   const count = await Quote.countDocuments({
     createdAt: { $gte: rangeStart, $lte: rangeEnd },
-    isPopular: { $ne: true },
   });
   return count === 0;
 };
 
 const loadRecentPopularQuotes = async (displayDayKey, limit = 40) => {
   const until = dayBounds(previousDayKey(displayDayKey)).end;
-  return Quote.find({
-    isPopular: true,
+  return PopularQuote.find({
     createdAt: { $lte: until },
   })
     .sort({ createdAt: -1 })
     .limit(limit)
     .select(
-      "text likesCount dislikesCount commentsCount category language createdAt author isPopular"
+      "text likesCount dislikesCount commentsCount category language createdAt author attributedTo"
     )
     .lean();
 };
@@ -112,6 +107,31 @@ const pickWinner = async (_displayDayKey, quotes) => {
     },
     method: "node",
   };
+};
+
+const hydrateQotdDoc = async (doc) => {
+  if (!doc) return null;
+  const plain = doc.toObject ? doc.toObject() : { ...doc };
+  const quoteId = plain.quote?._id || plain.quote;
+  if (!quoteId) return plain;
+
+  const found = await findQuoteDocByIdRaw(quoteId);
+  if (!found) {
+    plain.quote = null;
+    return plain;
+  }
+
+  await found.doc.populate({
+    path: "author",
+    select: "name username profilePicture qotdStars",
+  });
+  const quoteObj = found.doc.toObject ? found.doc.toObject() : found.doc;
+  plain.quote = {
+    ...quoteObj,
+    isPopular: found.isPopular,
+  };
+  if (found.isPopular) plain.usedPopular = true;
+  return plain;
 };
 
 /**
@@ -161,7 +181,7 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
     .select("starAwarded quote")
     .lean();
 
-  const doc = await QuoteOfTheDay.findOneAndUpdate(
+  const rawDoc = await QuoteOfTheDay.findOneAndUpdate(
     { date: displayDayKey },
     {
       date: displayDayKey,
@@ -173,26 +193,21 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
       selectedAt: new Date(),
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
-  ).populate({
-    path: "quote",
-    populate: {
-      path: "author",
-      select: "name username profilePicture qotdStars",
-    },
-  });
+  );
 
-  // Award exactly one star per display day (community quotes only — never popular).
+  const doc = await hydrateQotdDoc(rawDoc);
+
   if (!previous?.starAwarded) {
-    const isPopularWinner = Boolean(doc.quote?.isPopular || usedPopular);
-    const authorId = doc.quote?.author?._id || doc.quote?.author;
+    const isPopularWinner = Boolean(doc?.quote?.isPopular || usedPopular);
+    const authorId = doc?.quote?.author?._id || doc?.quote?.author;
     if (authorId && !isPopularWinner) {
       await User.updateOne({ _id: authorId }, { $inc: { qotdStars: 1 } });
     }
-    doc.starAwarded = true;
     await QuoteOfTheDay.updateOne(
-      { _id: doc._id },
+      { _id: rawDoc._id },
       { $set: { starAwarded: true } }
     );
+    if (doc) doc.starAwarded = true;
   }
 
   return doc;
@@ -202,13 +217,14 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
 export const syncQotdStarsFromHistory = async () => {
   const rows = await QuoteOfTheDay.find()
     .select("quote starAwarded usedPopular")
-    .populate("quote", "author isPopular")
     .lean();
 
   const counts = new Map();
   for (const row of rows) {
-    if (row.usedPopular || row.quote?.isPopular) continue;
-    const authorId = row.quote?.author?.toString();
+    if (row.usedPopular) continue;
+    const found = await findQuoteDocByIdRaw(row.quote);
+    if (!found || found.isPopular) continue;
+    const authorId = found.doc.author?.toString();
     if (!authorId) continue;
     counts.set(authorId, (counts.get(authorId) || 0) + 1);
   }
@@ -225,28 +241,16 @@ export const syncQotdStarsFromHistory = async () => {
 /** Current day's selection (chosen at midnight from the previous day). */
 export const getQuoteOfTheDay = async (targetDate = new Date()) => {
   const displayDayKey = toDayKey(targetDate);
-  let doc = await QuoteOfTheDay.findOne({ date: displayDayKey }).populate({
-    path: "quote",
-    populate: {
-      path: "author",
-      select: "name username profilePicture qotdStars",
-    },
-  });
+  let raw = await QuoteOfTheDay.findOne({ date: displayDayKey });
+  let doc = await hydrateQotdDoc(raw);
 
   if (!doc?.quote) {
     doc = await selectQuoteOfTheDay(targetDate);
   }
 
   if (!doc?.quote) {
-    doc = await QuoteOfTheDay.findOne()
-      .sort({ date: -1 })
-      .populate({
-        path: "quote",
-        populate: {
-          path: "author",
-          select: "name username profilePicture qotdStars",
-        },
-      });
+    raw = await QuoteOfTheDay.findOne().sort({ date: -1 });
+    doc = await hydrateQotdDoc(raw);
   }
 
   return doc;

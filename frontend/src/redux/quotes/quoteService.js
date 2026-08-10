@@ -60,6 +60,11 @@ const createPopularQuote = async (
   return response.data;
 };
 
+const bulkCreatePopularQuotes = async (quotes) => {
+  const response = await api.post("/quotes/popular/bulk", { quotes });
+  return response.data;
+};
+
 const updateQuote = async (
   id,
   text,
@@ -91,8 +96,8 @@ const dislikeQuote = async (id) => {
   return response.data;
 };
 
-const commentQuote = async (id, text) => {
-  const response = await api.put(`/quotes/${id}/comment`, { text });
+const commentQuote = async (id, text, language = "english") => {
+  const response = await api.put(`/quotes/${id}/comment`, { text, language });
   return response.data;
 };
 
@@ -164,6 +169,7 @@ export default {
   getFollowing,
   createQuote,
   createPopularQuote,
+  bulkCreatePopularQuotes,
   updateQuote,
   deleteQuote,
   likeQuote,

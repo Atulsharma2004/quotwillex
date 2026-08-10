@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import User from "../models/User.js";
 import Quote from "../models/Quote.js";
+import PopularQuote from "../models/PopularQuote.js";
 import Follow from "../models/Follow.js";
 import {
   validateUsernameFormat,
@@ -139,27 +140,97 @@ const loadProfileBundle = async (userId, viewerId, query = {}) => {
   const { page, limit, skip } = parsePagination(query, { limit: 3 });
   const postsFilter = { author: userId };
 
-  const [totalPosts, posts, isFollowing] = await Promise.all([
+  const requestedType = String(query.postsType || query.type || "all")
+    .trim()
+    .toLowerCase();
+  const effectiveRole = resolveEffectiveRole(user.email);
+  const canFilterPostTypes = isOwnProfile && effectiveRole === "admin";
+  const postsType = canFilterPostTypes
+    ? ["community", "popular", "all"].includes(requestedType)
+      ? requestedType
+      : "all"
+    : "all";
+
+  const [communityTotal, popularTotal, isFollowing] = await Promise.all([
     Quote.countDocuments(postsFilter),
-    Quote.find(postsFilter)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate("author", AUTHOR_SELECT)
-      .lean(),
+    PopularQuote.countDocuments(postsFilter),
     viewerId && !isOwnProfile
       ? Follow.exists({ follower: viewerId, following: userId }).then(Boolean)
       : Promise.resolve(false),
   ]);
 
-  const serializedPosts = await serializeQuotesForViewer(posts, viewerId);
+  let totalPosts = communityTotal + popularTotal;
+  let mixed = [];
+
+  if (postsType === "community") {
+    totalPosts = communityTotal;
+    const communityPosts = await Quote.find(postsFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("author", AUTHOR_SELECT)
+      .lean();
+    mixed = communityPosts.map((q) => ({ ...q, __kind: "community" }));
+  } else if (postsType === "popular") {
+    totalPosts = popularTotal;
+    const popularPosts = await PopularQuote.find(postsFilter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("author", AUTHOR_SELECT)
+      .lean();
+    mixed = popularPosts.map((q) => ({ ...q, __kind: "popular" }));
+  } else {
+    const [communityPosts, popularPosts] = await Promise.all([
+      Quote.find(postsFilter)
+        .sort({ createdAt: -1 })
+        .limit(limit + skip)
+        .populate("author", AUTHOR_SELECT)
+        .lean(),
+      PopularQuote.find(postsFilter)
+        .sort({ createdAt: -1 })
+        .limit(limit + skip)
+        .populate("author", AUTHOR_SELECT)
+        .lean(),
+    ]);
+    mixed = [
+      ...communityPosts.map((q) => ({ ...q, __kind: "community" })),
+      ...popularPosts.map((q) => ({ ...q, __kind: "popular" })),
+    ]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(skip, skip + limit);
+  }
+
+  const communitySerialized = await serializeQuotesForViewer(
+    mixed.filter((q) => q.__kind === "community"),
+    viewerId,
+    { kind: "community" }
+  );
+  const popularSerialized = await serializeQuotesForViewer(
+    mixed.filter((q) => q.__kind === "popular"),
+    viewerId,
+    { kind: "popular" }
+  );
+  const communityMap = new Map(
+    communitySerialized.map((q) => [q._id.toString(), q])
+  );
+  const popularMap = new Map(
+    popularSerialized.map((q) => [q._id.toString(), q])
+  );
+  const serializedPosts = mixed
+    .map((q) =>
+      q.__kind === "popular"
+        ? popularMap.get(q._id.toString())
+        : communityMap.get(q._id.toString())
+    )
+    .filter(Boolean);
   const base = isOwnProfile
     ? user.toObject()
     : stripPrivateProfileFields(user.toObject());
 
   return {
     ...base,
-    role: resolveEffectiveRole(user.email),
+    role: effectiveRole,
     authProvider: user.authProvider || "local",
     canChangePassword:
       isOwnProfile &&
@@ -169,7 +240,11 @@ const loadProfileBundle = async (userId, viewerId, query = {}) => {
     following: [],
     followerCount: user.followerCount || 0,
     followingCount: user.followingCount || 0,
-    postCount: user.postCount || totalPosts,
+    postCount: user.postCount || communityTotal + popularTotal,
+    communityPostCount: communityTotal,
+    popularPostCount: popularTotal,
+    postsType,
+    canFilterPostTypes,
     posts: serializedPosts,
     postsPagination: paginatedResponse(
       "quotes",

@@ -2,6 +2,7 @@ import express from "express";
 import {
   createQuote,
   createPopularQuote,
+  bulkCreatePopularQuotes,
   deleteQuote,
   updateQuote,
   likeQuote,
@@ -29,6 +30,7 @@ router.get("/quote-of-the-day", loadQuoteOfTheDay);
 router.get("/awards", loadAwardsLeaderboard);
 router.get("/showcase", loadHomeShowcase);
 router.get("/guest", searchLimiter, loadGuestQuotes);
+router.post("/popular/bulk", authMiddleware, requireAdmin, bulkCreatePopularQuotes);
 router.post("/popular", authMiddleware, requireAdmin, createPopularQuote);
 router.get("/popular", authMiddleware, loadPopularQuotes);
 router.put("/:id", authMiddleware, updateQuote);

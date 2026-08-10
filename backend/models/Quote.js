@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 
+/**
+ * Community quotes only. Popular / classics live in PopularQuote.
+ */
 const QuoteSchema = new mongoose.Schema(
   {
     text: { type: String, required: true, trim: true, maxlength: 2000 },
@@ -10,9 +13,6 @@ const QuoteSchema = new mongoose.Schema(
       lowercase: true,
       maxlength: 40,
     },
-    isPopular: { type: Boolean, default: false },
-    attributedTo: { type: String, trim: true, default: "", maxlength: 120 },
-    sourceWork: { type: String, trim: true, default: "", maxlength: 200 },
     language: {
       type: String,
       enum: ["english", "hindi"],
@@ -33,13 +33,15 @@ const QuoteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-QuoteSchema.index({ isPopular: 1, createdAt: -1 });
 QuoteSchema.index({ author: 1, createdAt: -1 });
 QuoteSchema.index({ category: 1, createdAt: -1 });
 QuoteSchema.index({ language: 1, createdAt: -1 });
 QuoteSchema.index({ createdAt: -1 });
 QuoteSchema.index({ likesCount: -1, createdAt: -1 });
 QuoteSchema.index({ commentsCount: -1, createdAt: -1 });
-QuoteSchema.index({ text: "text", attributedTo: "text" });
+QuoteSchema.index(
+  { text: "text" },
+  { default_language: "none", language_override: "unusedLanguageOverride" }
+);
 
 export default mongoose.model("Quote", QuoteSchema);

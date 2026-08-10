@@ -4,6 +4,7 @@ import {
   FaCalendarAlt,
   FaChevronDown,
   FaFilter,
+  FaFileUpload,
   FaLandmark,
   FaPlus,
   FaSearch,
@@ -18,6 +19,7 @@ import Seo from "../components/Seo";
 import {
   commentQuote,
   createPopularQuote,
+  bulkCreatePopularQuotes,
   deleteComment,
   deleteQuote,
   dislikeQuote,
@@ -37,10 +39,7 @@ import {
 } from "../constants/quoteCategories";
 import { SEO_ROUTES } from "../constants/site";
 import { quoteUi, sortOptions } from "../constants/quoteUi";
-import {
-  moderateText,
-  getAbuseRejectionMessage,
-} from "../utils/contentModeration";
+import FeedbackToast from "../components/FeedbackToast";
 
 const QUOTES_PER_PAGE = 10;
 
@@ -60,6 +59,13 @@ const PopularQuotes = () => {
   const [language, setLanguage] = useState("english");
   const [currentPage, setCurrentPage] = useState(1);
   const [postError, setPostError] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const [isBulkUploading, setIsBulkUploading] = useState(false);
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkPreviewCount, setBulkPreviewCount] = useState(0);
+  const [bulkItems, setBulkItems] = useState([]);
+  const [bulkError, setBulkError] = useState("");
+  const [toast, setToast] = useState({ message: "", type: "success" });
   const [editCommentId, setEditCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
   const [editQuoteId, setEditQuoteId] = useState(null);
@@ -209,6 +215,7 @@ const PopularQuotes = () => {
   };
 
   const handlePost = async () => {
+    if (isPosting) return;
     if (!user || user.role !== "admin") {
       requireLogin();
       return;
@@ -223,33 +230,165 @@ const PopularQuotes = () => {
       return;
     }
 
-    const moderation = await moderateText(text, language);
-    if (moderation.blocked) {
-      setPostError(
-        moderation.message || getAbuseRejectionMessage(moderation.words, language)
+    const ui = quoteUi(language);
+    setIsPosting(true);
+    setPostError("");
+    try {
+      const action = await dispatch(
+        createPopularQuote({
+          text: text.trim(),
+          attributedTo: attributedTo.trim(),
+          sourceWork: sourceWork.trim(),
+          category: resolveCategory(category, customCategory),
+          language,
+        })
       );
+      if (createPopularQuote.fulfilled.match(action)) {
+        setText("");
+        setAttributedTo("");
+        setSourceWork("");
+        setCategory("");
+        setCustomCategory("");
+        setLanguage("english");
+        setToast({ message: ui.publishSuccess, type: "success" });
+      } else {
+        setPostError(action.payload || "Unable to publish this quote.");
+      }
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
+  const normalizeBulkPayload = (parsed) => {
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.quotes)) return parsed.quotes;
+    if (parsed && typeof parsed === "object" && (parsed.quote || parsed.text)) {
+      return [parsed];
+    }
+    return null;
+  };
+
+  const handleBulkFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setBulkError("");
+    setBulkItems([]);
+    setBulkFileName("");
+    setBulkPreviewCount(0);
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".json")) {
+      setBulkError("Please upload a .json file.");
       return;
     }
 
-    setPostError("");
-    const action = await dispatch(
-      createPopularQuote({
-        text: text.trim(),
-        attributedTo: attributedTo.trim(),
-        sourceWork: sourceWork.trim(),
-        category: resolveCategory(category, customCategory),
-        language,
-      })
-    );
-    if (createPopularQuote.fulfilled.match(action)) {
-      setText("");
-      setAttributedTo("");
-      setSourceWork("");
-      setCategory("");
-      setCustomCategory("");
-      setLanguage("english");
-    } else {
-      setPostError(action.payload || "Unable to publish this quote.");
+    try {
+      const textContent = await file.text();
+      const parsed = JSON.parse(textContent);
+      const items = normalizeBulkPayload(parsed);
+      if (!items) {
+        setBulkError(
+          'Invalid JSON. Use an array of quotes, or { "quotes": [ ... ] }.'
+        );
+        return;
+      }
+      if (!items.length) {
+        setBulkError("JSON file has no quotes.");
+        return;
+      }
+      if (items.length > 30) {
+        setBulkError("You can upload at most 30 quotes at a time.");
+        return;
+      }
+      setBulkItems(items);
+      setBulkFileName(file.name);
+      setBulkPreviewCount(items.length);
+    } catch {
+      setBulkError("Could not read that JSON file. Check the format and try again.");
+    }
+  };
+
+  const downloadBulkSample = () => {
+    const sample = [
+      {
+        language: "english",
+        quote: "The only way to do great work is to love what you do.",
+        writer: "Steve Jobs",
+        source: "",
+        category: "motivation",
+        other: "",
+      },
+      {
+        language: "hindi",
+        quote: "खुद पर विश्वास रखो।",
+        writer: "Unknown",
+        source: "",
+        category: "other",
+        other: "आत्मविश्वास",
+      },
+    ];
+    const blob = new Blob([JSON.stringify(sample, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "popular-quotes-sample.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleBulkUpload = async () => {
+    if (isBulkUploading || !bulkItems.length) return;
+    if (!user || user.role !== "admin") {
+      requireLogin();
+      return;
+    }
+
+    setIsBulkUploading(true);
+    setBulkError("");
+    try {
+      const action = await dispatch(bulkCreatePopularQuotes(bulkItems));
+      if (bulkCreatePopularQuotes.fulfilled.match(action)) {
+        const created = action.payload?.createdCount || 0;
+        const failed = action.payload?.failedCount || 0;
+        const msg =
+          action.payload?.message ||
+          `Published ${created} popular quote(s) successfully.`;
+        setToast({
+          message: msg,
+          type: created > 0 ? "success" : "error",
+        });
+        if (failed && action.payload?.failed?.length) {
+          const details = action.payload.failed
+            .slice(0, 5)
+            .map((f) => `#${f.index}: ${f.error}`)
+            .join(" · ");
+          setBulkError(details);
+        } else {
+          setBulkError("");
+        }
+        setBulkItems([]);
+        setBulkFileName("");
+        setBulkPreviewCount(0);
+        reloadFeed();
+      } else {
+        const payload = action.payload;
+        const message =
+          payload?.error ||
+          payload?.message ||
+          "Unable to bulk publish quotes.";
+        setBulkError(message);
+        if (payload?.failed?.length) {
+          const details = payload.failed
+            .slice(0, 5)
+            .map((f) => `#${f.index}: ${f.error}`)
+            .join(" · ");
+          setBulkError(`${message} ${details}`);
+        }
+      }
+    } finally {
+      setIsBulkUploading(false);
     }
   };
 
@@ -404,9 +543,10 @@ const PopularQuotes = () => {
             <textarea
               rows={3}
               value={text}
+              disabled={isPosting}
               onChange={(event) => setText(event.target.value)}
               placeholder={postUi.popularQuotePlaceholder}
-              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:opacity-60"
             />
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <input
@@ -464,6 +604,7 @@ const PopularQuotes = () => {
             <button
               type="button"
               disabled={
+                isPosting ||
                 !text.trim() ||
                 !attributedTo.trim() ||
                 (category === OTHER_CATEGORY_VALUE && !customCategory.trim())
@@ -471,8 +612,68 @@ const PopularQuotes = () => {
               onClick={handlePost}
               className="mt-3 inline-flex items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <FaPlus className="text-xs" /> {postUi.publishQuote}
+              <FaPlus className="text-xs" />{" "}
+              {isPosting ? postUi.publishingQuote : postUi.publishQuote}
             </button>
+
+            <div className="mt-6 border-t border-indigo-50 pt-5">
+              <h3 className="font-semibold text-gray-900">
+                {postUi.bulkUploadTitle}
+              </h3>
+              <p className="mt-1 text-sm text-gray-500">{postUi.bulkUploadHint}</p>
+              <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-900 p-3 text-[11px] leading-relaxed text-slate-100">
+{`[
+  {
+    "language": "english",
+    "quote": "Your quote text",
+    "writer": "Author name",
+    "source": "",
+    "category": "other",
+    "other": "your custom category"
+  }
+]`}
+              </pre>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition hover:border-indigo-300 hover:text-indigo-700">
+                  <FaFileUpload className="text-xs" />
+                  {postUi.bulkChooseFile}
+                  <input
+                    type="file"
+                    accept=".json,application/json"
+                    className="hidden"
+                    disabled={isBulkUploading}
+                    onChange={handleBulkFileChange}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={downloadBulkSample}
+                  className="text-sm font-semibold text-indigo-600 hover:underline"
+                >
+                  {postUi.bulkDownloadSample}
+                </button>
+              </div>
+              {bulkFileName && (
+                <p className="mt-2 text-sm text-gray-600">
+                  {bulkFileName} · {bulkPreviewCount} quote
+                  {bulkPreviewCount === 1 ? "" : "s"} ready
+                </p>
+              )}
+              {bulkError && (
+                <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {bulkError}
+                </p>
+              )}
+              <button
+                type="button"
+                disabled={isBulkUploading || !bulkItems.length}
+                onClick={handleBulkUpload}
+                className="mt-3 inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FaFileUpload className="text-xs" />
+                {isBulkUploading ? postUi.bulkUploading : postUi.bulkUploadButton}
+              </button>
+            </div>
           </section>
         )}
 
@@ -660,25 +861,45 @@ const PopularQuotes = () => {
             onEdit={handleEditQuote}
             onSave={handleSaveQuote}
             onDelete={handleDeleteQuote}
-            onComment={(id, commentText) => {
-              if (!user) return requireLogin();
-              dispatch(commentQuote({ id, text: commentText }));
+            onComment={async (id, commentText, language = "english") => {
+              if (!user) {
+                requireLogin();
+                throw new Error("Login required");
+              }
+              const action = await dispatch(
+                commentQuote({ id, text: commentText, language })
+              );
+              if (commentQuote.rejected.match(action)) {
+                throw new Error(action.payload || "Unable to post comment");
+              }
             }}
             onEditComment={(comment) => {
               if (!user) return requireLogin();
+              if (!comment?._id) {
+                setEditCommentId(null);
+                setEditCommentText("");
+                return;
+              }
               setEditCommentId(comment._id);
               setEditCommentText(comment.text);
             }}
-            onSaveComment={(quoteId, commentId) => {
-              if (!user) return requireLogin();
+            onSaveComment={async (quoteId, commentId) => {
+              if (!user) {
+                requireLogin();
+                throw new Error("Login required");
+              }
               if (!editCommentText.trim()) return;
-              dispatch(
+              const action = await dispatch(
                 editComment({
                   quoteId,
                   commentId,
                   text: editCommentText.trim(),
                 })
-              ).then(() => setEditCommentId(null));
+              );
+              if (editComment.rejected.match(action)) {
+                throw new Error(action.payload || "Unable to update comment");
+              }
+              setEditCommentId(null);
             }}
             onDeleteComment={(quoteId, commentId) => {
               if (!user) return requireLogin();
@@ -708,6 +929,11 @@ const PopularQuotes = () => {
           label={guestMode ? "Preview quote pages" : "Popular quote pages"}
         />
       )}
+      <FeedbackToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "success" })}
+      />
     </div>
   );
 };

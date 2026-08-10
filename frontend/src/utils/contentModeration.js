@@ -1,6 +1,7 @@
 import api from "../api/api";
 
 export const moderateText = async (text = "", language = "english") => {
+  // Kept for optional client previews; create/comment rely on server check only.
   const response = await api.post("/moderation/check", { text, language });
   return response.data;
 };

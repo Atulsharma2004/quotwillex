@@ -1,24 +1,21 @@
 import Quote from "../models/Quote.js";
+import PopularQuote from "../models/PopularQuote.js";
 import Comment from "../models/Comment.js";
 import QuoteLike from "../models/QuoteLike.js";
 import QuoteDislike from "../models/QuoteDislike.js";
 import User from "../models/User.js";
 import { containsAbusiveContent } from "../utils/contentModeration.js";
+import { findQuoteDocByIdRaw } from "../utils/quoteDocuments.js";
 
 const BATCH = 200;
 
-/**
- * Deletes abusive posts/comments in batches (cursor-friendly).
- */
-export const cleanupAbusiveContent = async () => {
-  let deletedPosts = 0;
-  let removedComments = 0;
+const purgeAbusiveFromModel = async (Model) => {
+  let deleted = 0;
   let lastId = null;
 
-  // Quotes in batches
   for (;;) {
     const filter = lastId ? { _id: { $gt: lastId } } : {};
-    const batch = await Quote.find(filter)
+    const batch = await Model.find(filter)
       .sort({ _id: 1 })
       .limit(BATCH)
       .select("_id text author")
@@ -30,7 +27,7 @@ export const cleanupAbusiveContent = async () => {
       if (!containsAbusiveContent(quote.text)) continue;
 
       await Promise.all([
-        Quote.deleteOne({ _id: quote._id }),
+        Model.deleteOne({ _id: quote._id }),
         QuoteLike.deleteMany({ quote: quote._id }),
         QuoteDislike.deleteMany({ quote: quote._id }),
         Comment.deleteMany({ quote: quote._id }),
@@ -39,12 +36,23 @@ export const cleanupAbusiveContent = async () => {
           { $inc: { postCount: -1 } }
         ),
       ]);
-      deletedPosts += 1;
+      deleted += 1;
     }
   }
 
-  // Comments in batches
-  lastId = null;
+  return deleted;
+};
+
+/**
+ * Deletes abusive posts/comments in batches (cursor-friendly).
+ */
+export const cleanupAbusiveContent = async () => {
+  const deletedCommunity = await purgeAbusiveFromModel(Quote);
+  const deletedPopular = await purgeAbusiveFromModel(PopularQuote);
+  const deletedPosts = deletedCommunity + deletedPopular;
+  let removedComments = 0;
+  let lastId = null;
+
   for (;;) {
     const filter = lastId ? { _id: { $gt: lastId } } : {};
     const batch = await Comment.find(filter)
@@ -58,10 +66,13 @@ export const cleanupAbusiveContent = async () => {
       lastId = comment._id;
       if (!containsAbusiveContent(comment.text)) continue;
       await Comment.deleteOne({ _id: comment._id });
-      await Quote.updateOne(
-        { _id: comment.quote, commentsCount: { $gt: 0 } },
-        { $inc: { commentsCount: -1 } }
-      );
+      const found = await findQuoteDocByIdRaw(comment.quote);
+      if (found) {
+        await found.Model.updateOne(
+          { _id: comment.quote, commentsCount: { $gt: 0 } },
+          { $inc: { commentsCount: -1 } }
+        );
+      }
       removedComments += 1;
     }
   }

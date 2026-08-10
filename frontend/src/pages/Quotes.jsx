@@ -25,6 +25,7 @@ import QuoteCard from "../components/QuoteCard";
 import Pagination from "../components/Pagination";
 import { QuoteFeedSkeleton } from "../components/Shimmer";
 import Seo from "../components/Seo";
+import FeedbackToast from "../components/FeedbackToast";
 import {
   QUOTE_CATEGORIES,
   OTHER_CATEGORY_VALUE,
@@ -32,10 +33,6 @@ import {
 } from "../constants/quoteCategories";
 import { SEO_ROUTES } from "../constants/site";
 import { quoteUi, sortOptions } from "../constants/quoteUi";
-import {
-  moderateText,
-  getAbuseRejectionMessage,
-} from "../utils/contentModeration";
 import {
   FaCalendarAlt,
   FaChevronDown,
@@ -74,6 +71,8 @@ const Quotes = () => {
   const [deletingQuoteId, setDeletingQuoteId] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [createError, setCreateError] = useState("");
+  const [isPosting, setIsPosting] = useState(false);
+  const [toast, setToast] = useState({ message: "", type: "success" });
   const initialCategory = String(searchParams.get("category") || "all")
     .trim()
     .toLowerCase();
@@ -183,6 +182,7 @@ const Quotes = () => {
   };
 
   const handleCreate = async () => {
+    if (isPosting) return;
     if (!newQuote.trim()) return;
     if (newCategory === OTHER_CATEGORY_VALUE && !customCategory.trim()) {
       setCreateError(
@@ -193,20 +193,13 @@ const Quotes = () => {
       return;
     }
 
-    const moderation = await moderateText(newQuote, newLanguage);
-    if (moderation.blocked) {
-      setCreateError(
-        moderation.message ||
-          getAbuseRejectionMessage(moderation.words, newLanguage)
-      );
-      return;
-    }
-
     const text = newQuote.trim();
     const category = resolveCategory(newCategory, customCategory);
     const language = newLanguage;
     const tempId = `temp-${Date.now()}`;
+    const ui = quoteUi(language);
 
+    setIsPosting(true);
     setCreateError("");
     setNewQuote("");
     setNewCategory("");
@@ -231,9 +224,22 @@ const Quotes = () => {
       })
     );
 
-    const action = await dispatch(createQuote({ text, category, language, tempId }));
-    if (createQuote.rejected.match(action)) {
-      setCreateError(action.payload || "Unable to post the quote. Please try again.");
+    try {
+      const action = await dispatch(
+        createQuote({ text, category, language, tempId })
+      );
+      if (createQuote.rejected.match(action)) {
+        setCreateError(
+          action.payload || "Unable to post the quote. Please try again."
+        );
+        setNewQuote(text);
+        setNewCategory(category || "");
+        setNewLanguage(language);
+      } else {
+        setToast({ message: ui.postSuccess, type: "success" });
+      }
+    } finally {
+      setIsPosting(false);
     }
   };
 
@@ -248,20 +254,13 @@ const Quotes = () => {
   const handleSaveClick = async (id) => {
     if (!editText.trim()) return;
     if (editCategory === OTHER_CATEGORY_VALUE && !editCustomCategory.trim()) return;
-    const moderation = await moderateText(editText, newLanguage);
-    if (moderation.blocked) {
-      setCreateError(
-        moderation.message ||
-          getAbuseRejectionMessage(moderation.words, newLanguage)
-      );
-      return;
-    }
     const text = editText.trim();
     const category = resolveCategory(editCategory, editCustomCategory);
     dispatch(optimisticUpdateQuoteText({ id, text, category }));
     setEditQuoteId(null);
     dispatch(updateQuote({ id, text, category })).then((action) => {
       if (updateQuote.rejected.match(action)) {
+        setCreateError(action.payload || "Unable to update the quote.");
         dispatch(fetchQuotes());
       }
     });
@@ -315,20 +314,33 @@ const Quotes = () => {
     });
   };
 
-  const handleComment = (quoteId, text) => {
-    dispatch(commentQuote({ id: quoteId, text }));
+  const handleComment = async (quoteId, text, language = "english") => {
+    const action = await dispatch(
+      commentQuote({ id: quoteId, text, language })
+    );
+    if (commentQuote.rejected.match(action)) {
+      throw new Error(action.payload || "Unable to post comment");
+    }
   };
 
   const handleEditComment = (comment) => {
+    if (!comment?._id) {
+      setEditCommentId(null);
+      setEditCommentText("");
+      return;
+    }
     setEditCommentId(comment._id);
     setEditCommentText(comment.text);
   };
 
   const handleSaveComment = async (quoteId, commentId) => {
     if (!editCommentText.trim()) return;
-    await dispatch(
+    const action = await dispatch(
       editComment({ quoteId, commentId, text: editCommentText.trim() })
     );
+    if (editComment.rejected.match(action)) {
+      throw new Error(action.payload || "Unable to update comment");
+    }
     setEditCommentId(null);
   };
 
@@ -416,7 +428,8 @@ const Quotes = () => {
             <textarea
               ref={composeInputRef}
               rows={3}
-              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+              disabled={isPosting}
+              className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-800 outline-none transition placeholder:text-gray-400 focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-100 disabled:opacity-60"
               value={newQuote}
               onChange={(e) => setNewQuote(e.target.value)}
               placeholder={postUi.quotePlaceholder}
@@ -462,12 +475,12 @@ const Quotes = () => {
               </div>
               <button
                 type="button"
-                disabled={!newQuote.trim()}
+                disabled={isPosting || !newQuote.trim()}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:shadow-none"
                 onClick={handleCreate}
               >
                 <FaPlus className="text-xs" />
-                {postUi.postQuote}
+                {isPosting ? postUi.postingQuote : postUi.postQuote}
               </button>
             </div>
           </div>
@@ -693,6 +706,11 @@ const Quotes = () => {
         />
       )}
       </div>
+      <FeedbackToast
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ message: "", type: "success" })}
+      />
     </div>
   );
 };

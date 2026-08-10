@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { login, reset } from "../redux/auth/authSlice";
 import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import GoogleSignInButton from "../components/GoogleSignInButton";
+import PasswordField from "../components/PasswordField";
 import Seo from "../components/Seo";
 import { SEO_ROUTES } from "../constants/site";
 import authService from "../redux/auth/authService";
@@ -143,14 +144,15 @@ const Login = () => {
             className="w-3/4 px-2 py-1 font-bold text-md mb-4 rounded-md border"
           />
           <br />
-          <input
-            type="password"
+          <PasswordField
             name="password"
             placeholder="Password"
             required
+            autoComplete="current-password"
             value={formData.password}
             onChange={handleChange}
-            className="w-3/4 px-2 py-1 font-bold text-md mb-4 rounded-md border"
+            wrapperClassName="relative mb-4 inline-block w-3/4 text-left align-top"
+            className="px-2 py-1 font-bold text-md rounded-md border"
           />
           <br />
           <div className="w-3/4 mx-auto text-right mb-2">
