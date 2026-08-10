@@ -37,7 +37,39 @@ if (!jwtOk) {
 }
 
 const app = express();
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(
+  /\/$/,
+  ""
+);
+
+/** Allow apex + www (and optional comma-separated FRONTEND_URLS). */
+const buildAllowedOrigins = () => {
+  const raw = [
+    frontendUrl,
+    ...(process.env.FRONTEND_URLS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  ];
+  const origins = new Set();
+  for (const url of raw) {
+    const base = String(url).replace(/\/$/, "");
+    if (!base) continue;
+    origins.add(base);
+    try {
+      const u = new URL(base);
+      if (u.hostname.startsWith("www.")) {
+        origins.add(`${u.protocol}//${u.hostname.slice(4)}`);
+      } else {
+        origins.add(`${u.protocol}//www.${u.hostname}`);
+      }
+    } catch {
+      /* ignore invalid */
+    }
+  }
+  return origins;
+};
+const allowedOrigins = buildAllowedOrigins();
 
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
@@ -51,7 +83,13 @@ app.use(
 
 app.use(
   cors({
-    origin: frontendUrl,
+    origin(origin, callback) {
+      // Non-browser / same-origin tools may omit Origin
+      if (!origin || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true,
   })
 );
