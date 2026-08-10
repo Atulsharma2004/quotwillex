@@ -15,11 +15,16 @@ Allow: /awards
 Allow: /contact
 Allow: /guidelines
 Allow: /signup
+Allow: /profile/
 
 Disallow: /login
 Disallow: /auth/
-Disallow: /profile
+Disallow: /account
+Disallow: /profile$
 Disallow: /quotes
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
 Sitemap: ${base}/sitemap.xml
 `;
@@ -86,7 +91,9 @@ const seoFilesPlugin = (siteUrl) => ({
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const siteUrl = (env.VITE_SITE_URL || "https://quotwellix.com").replace(
+  // Production default for build/Vercel. Omit VITE_SITE_URL locally so the
+  // app uses window.location.origin for runtime canonicals.
+  const siteUrl = (env.VITE_SITE_URL || "https://quotwellix.in").replace(
     /\/+$/,
     ""
   );

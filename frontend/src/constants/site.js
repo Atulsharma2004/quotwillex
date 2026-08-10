@@ -1,6 +1,6 @@
 /**
- * Site-wide SEO defaults. Set VITE_SITE_URL to your production origin
- * (e.g. https://quotwellix.com) before building for correct canonicals/sitemap.
+ * Site-wide SEO defaults. On Vercel set VITE_SITE_URL=https://quotwellix.in.
+ * Leave it unset for local so canonicals use http://localhost:5173.
  */
 const trimSlash = (url = "") => String(url).replace(/\/+$/, "");
 
@@ -11,19 +11,26 @@ export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 /** Default profile image when the user does not upload one. */
 export const DEFAULT_AVATAR = "/default-avatar.svg";
 export const SITE_DESCRIPTION =
-  "Quotwellix is a social quotes platform to discover daily inspiration, share wisdom, explore popular classics, and connect with people who love meaningful words — in English and Hindi.";
+  "Quotwellix is a social quotes platform to share quotes online in English and Hindi, discover quote of the day, browse popular classics, and connect with a thoughtful community in India.";
 export const SITE_KEYWORDS = [
   "Quotwellix",
-  "quotes",
+  "quotwellix.in",
+  "share quotes online",
+  "English Hindi quotes community",
   "inspirational quotes",
   "motivational quotes",
   "daily quotes",
   "quote of the day",
+  "popular quotes classics",
   "famous quotes",
   "Hindi quotes",
+  "social quotes platform India",
+  "post your own quotes online",
   "wisdom quotes",
-  "share quotes",
 ].join(", ");
+
+/** Production origin used when VITE_SITE_URL is unset and window is unavailable (SSR/build). */
+export const PRODUCTION_SITE_URL = "https://quotwellix.in";
 
 export const getSiteUrl = () => {
   const fromEnv = trimSlash(import.meta.env.VITE_SITE_URL || "");
@@ -31,7 +38,7 @@ export const getSiteUrl = () => {
   if (typeof window !== "undefined" && window.location?.origin) {
     return trimSlash(window.location.origin);
   }
-  return "https://quotwellix.com";
+  return PRODUCTION_SITE_URL;
 };
 
 export const absoluteUrl = (path = "/") => {
@@ -52,13 +59,13 @@ export const SEO_ROUTES = {
   popular: {
     title: `Popular Quotes & Classics | ${SITE_NAME}`,
     description:
-      "Browse timeless popular quotes from famous voices. Filter by category, language, and date — English and Hindi classics on Quotwellix.",
+      "Browse popular quotes and classics in English and Hindi on Quotwellix. Filter famous lines by category, language, and date — timeless wisdom to share.",
     path: "/popular-quotes",
   },
   awards: {
     title: `Awards & Leaderboard | ${SITE_NAME}`,
     description:
-      "See Quotwellix’s most liked quotes, most commented lines, and creators with the most Quote of the Day stars.",
+      "See Quotwellix’s awards leaderboard: most liked quotes, most commented lines, and creators with the most Quote of the Day stars.",
     path: "/awards",
   },
   quotes: {
@@ -89,7 +96,7 @@ export const SEO_ROUTES = {
   signup: {
     title: `Create Account | ${SITE_NAME}`,
     description:
-      "Join Quotwellix free — share inspirational quotes, discover classics, and connect with a thoughtful community.",
+      "Join Quotwellix free — post your own quotes online, discover popular classics, and connect with an English and Hindi quotes community.",
     path: "/signup",
     noindex: false,
   },

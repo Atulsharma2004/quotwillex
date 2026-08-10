@@ -15,7 +15,7 @@ import {
   FaUsers,
 } from "react-icons/fa";
 import Seo from "../components/Seo";
-import { SEO_ROUTES } from "../constants/site";
+import { SEO_ROUTES, absoluteUrl } from "../constants/site";
 import GoogleSignInButton from "../components/GoogleSignInButton";
 import QuoteOfTheDayCard from "../components/QuoteOfTheDayCard";
 import { QotdSkeleton } from "../components/Shimmer";
@@ -313,7 +313,7 @@ const Home = () => {
         isPartOf: {
           "@type": "WebSite",
           name: "Quotwellix",
-          url: SEO_ROUTES.home.path,
+          url: absoluteUrl("/"),
         },
       }
     : null;

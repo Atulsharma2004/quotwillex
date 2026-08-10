@@ -38,6 +38,7 @@ import {
   canonicalProfilePath,
   profilePath,
 } from "../utils/profileKey";
+
 import {
   COMPLETE_PROFILE_DISMISSED,
   COMPLETE_PROFILE_FLAG,
@@ -581,12 +582,28 @@ const Profile = () => {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <Seo
-        {...SEO_ROUTES.profile}
         title={
           viewedProfile?.name
-            ? `${viewedProfile.name} | Quotwellix Profile`
+            ? `${viewedProfile.name}${
+                viewedProfile.username ? ` (@${viewedProfile.username})` : ""
+              } | Quotwellix`
             : SEO_ROUTES.profile.title
         }
+        description={
+          viewedProfile?.name
+            ? `${viewedProfile.name} on Quotwellix — read their shared quotes in English and Hindi, popular posts, and community wisdom.`
+            : SEO_ROUTES.profile.description
+        }
+        path={
+          isOwnProfile
+            ? SEO_ROUTES.profile.path
+            : viewedProfile
+              ? profilePath(viewedProfile, currentUser?._id)
+              : profileKey
+                ? `/profile/${profileKey}`
+                : SEO_ROUTES.profile.path
+        }
+        noindex={isOwnProfile || !viewedProfile}
       />
       <ProfileHero
         profile={viewedProfile}

@@ -1,7 +1,7 @@
 {
   "name": "Quotwellix",
   "short_name": "Quotwellix",
-  "description": "Words that linger. Share wisdom and discover timeless quotes in English and Hindi.",
+  "description": "Share quotes online in English and Hindi. Discover quote of the day, popular classics, and a thoughtful community on Quotwellix.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F6F0E6",

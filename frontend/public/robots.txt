@@ -5,10 +5,15 @@ Allow: /awards
 Allow: /contact
 Allow: /guidelines
 Allow: /signup
+Allow: /profile/
 
 Disallow: /login
 Disallow: /auth/
-Disallow: /profile
+Disallow: /account
+Disallow: /profile$
 Disallow: /quotes
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
-Sitemap: https://quotwellix.com/sitemap.xml
+Sitemap: https://quotwellix.in/sitemap.xml
