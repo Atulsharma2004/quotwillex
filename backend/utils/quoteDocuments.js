@@ -15,7 +15,10 @@ export const modelForKind = (kind) =>
 export const findQuoteDocById = async (id, { lean = false } = {}) => {
   if (!id) return null;
 
-  let query = Quote.findById(id).populate("author", "name username profilePicture");
+  let query = Quote.findById(id).populate(
+    "author",
+    "name username profilePicture qotdStars"
+  );
   let doc = lean ? await query.lean() : await query;
   if (doc) {
     return {
@@ -28,7 +31,7 @@ export const findQuoteDocById = async (id, { lean = false } = {}) => {
 
   query = PopularQuote.findById(id).populate(
     "author",
-    "name username profilePicture"
+    "name username profilePicture qotdStars"
   );
   doc = lean ? await query.lean() : await query;
   if (doc) {

@@ -107,13 +107,17 @@ const Footer = () => {
             onClick={() => navigate("/")}
             className="mb-3 flex items-center gap-2 text-left text-lg font-bold text-white transition hover:text-indigo-200"
           >
-            <img
-              src="/quotwellix-logo.png"
-              alt=""
-              className="h-9 w-9 rounded-xl object-cover"
-              width={36}
-              height={36}
-            />
+            <picture>
+              <source srcSet="/quotwellix-mark.webp" type="image/webp" />
+              <img
+                src="/quotwellix-mark.png"
+                alt=""
+                className="h-9 w-9 rounded-xl object-cover"
+                width={36}
+                height={36}
+                decoding="async"
+              />
+            </picture>
             Quotwellix
           </button>
           <p className="max-w-sm text-sm leading-relaxed text-indigo-100/80">

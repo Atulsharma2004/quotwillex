@@ -1,0 +1,34 @@
+# Quotwellix
+
+> Words that linger. / शब्द जो याद रह जाएँ।
+> A social quotes platform for English और Hindi — quotes, सुविचार, शायरी, motivational lines.
+
+Quotwellix helps people post original quotes, browse popular classics, follow creators, and find a daily Quote of the Day / आज का विचार.
+
+## Main pages
+
+- [Home](https://quotwellix.in/): Quote of the day and product overview
+- [Popular Quotes](https://quotwellix.in/popular-quotes): Famous quotes, हिंदी कोट्स, सुविचार, classics
+- [Awards](https://quotwellix.in/awards): Leaderboard for likes, comments, and Quote of the Day stars
+- [Guidelines](https://quotwellix.in/guidelines): Community rules, privacy, and usage instructions
+- [Contact](https://quotwellix.in/contact): Support and feedback / संपर्क
+- [Sign up](https://quotwellix.in/signup): Create a free account / मुफ्त जुड़ें
+
+## Hindi search themes
+
+- हिंदी कोट्स, प्रेरणादायक विचार, प्रेरक अनमोल वचन, सुविचार
+- हिंदी शायरी, मोटिवेशनल कोट्स हिंदी, आज का विचार, दिन का सुविचार
+- love quotes hindi, success quotes hindi, whatsapp status hindi
+- suvichar, anmol vachan, hindi shayari
+
+## Optional
+
+- [Sitemap](https://quotwellix.in/sitemap.xml)
+- [robots.txt](https://quotwellix.in/robots.txt)
+
+## Notes for AI agents
+
+- Prefer linking to public pages above. Do not index private account areas (`/login`, `/profile`, `/quotes` feed, `/account`).
+- Content is user-generated; treat quotes as community content unless marked popular/classic.
+- Primary languages: English and Hindi (India).
+- Contact: quotesupport9@gmail.com

@@ -1,9 +1,14 @@
 import Quote from "../models/Quote.js";
+import PopularQuote from "../models/PopularQuote.js";
 import QuoteLike from "../models/QuoteLike.js";
 import Comment from "../models/Comment.js";
-import QuoteOfTheDay from "../models/QuoteOfTheDay.js";
 import User from "../models/User.js";
 import { AUTHOR_SELECT } from "../utils/quoteSerializer.js";
+import { findQuoteDocById } from "../utils/quoteDocuments.js";
+import {
+  getQuoteOfTheDay,
+  syncQotdStarsFromHistory,
+} from "../jobs/selectQuoteOfTheDay.js";
 
 const LEADERBOARD_LIMIT = 3;
 
@@ -29,7 +34,7 @@ const localDayBounds = (date = new Date()) => {
   return { start, end };
 };
 
-const serializeQuoteAward = (quote, metricCount) => {
+const serializeQuoteAward = (quote, metricCount, isPopular = false) => {
   if (!quote) return null;
   return {
     _id: quote._id,
@@ -40,7 +45,8 @@ const serializeQuoteAward = (quote, metricCount) => {
     commentsCount: quote.commentsCount || 0,
     metricCount: metricCount ?? 0,
     createdAt: quote.createdAt,
-    isPopular: false,
+    isPopular: Boolean(isPopular),
+    attributedTo: isPopular ? quote.attributedTo || "" : "",
     author: quote.author
       ? {
           _id: quote.author._id,
@@ -80,41 +86,58 @@ const uniqueAuthorsTopQuotes = (rows, limit = LEADERBOARD_LIMIT) => {
   return board;
 };
 
-/** Overall: denormalized counts; ties → earlier quote wins; one seat per person. */
-const loadOverallQuoteBoard = async (metricField) => {
-  const authorSelect = `${AUTHOR_SELECT} qotdStars`;
-  const filter = {
-    [metricField]: { $gt: 0 },
-  };
-
-  // Pull a wider pool so we can skip duplicate authors and still fill top 3.
-  let quotes = await Quote.find(filter)
+const fetchTopFromModel = async (Model, metricField, isPopular, authorSelect) => {
+  const withMetric = await Model.find({ [metricField]: { $gt: 0 } })
     .sort({ [metricField]: -1, createdAt: 1 })
     .limit(60)
     .populate("author", authorSelect)
     .lean();
 
-  if (!quotes.length) {
-    quotes = await Quote.find({})
-      .sort({ [metricField]: -1, createdAt: 1 })
-      .limit(60)
-      .populate("author", authorSelect)
-      .lean();
+  if (withMetric.length) {
+    return withMetric.map((quote) =>
+      serializeQuoteAward(quote, quote[metricField] || 0, isPopular)
+    );
   }
 
-  const ranked = quotes.map((quote) =>
-    serializeQuoteAward(quote, quote[metricField] || 0)
+  const any = await Model.find({})
+    .sort({ [metricField]: -1, createdAt: 1 })
+    .limit(60)
+    .populate("author", authorSelect)
+    .lean();
+
+  return any.map((quote) =>
+    serializeQuoteAward(quote, quote[metricField] || 0, isPopular)
   );
-  return uniqueAuthorsTopQuotes(ranked);
+};
+
+/** Popular boards only when the community Quote collection is empty. */
+const hasAnyCommunityQuote = async () => Boolean(await Quote.exists({}));
+
+/**
+ * Overall: community quotes only when any exist; popular only as empty-community fallback.
+ */
+const loadOverallQuoteBoard = async (metricField) => {
+  const authorSelect = `${AUTHOR_SELECT} qotdStars`;
+  const usePopularFallback = !(await hasAnyCommunityQuote());
+
+  if (!usePopularFallback) {
+    return uniqueAuthorsTopQuotes(
+      await fetchTopFromModel(Quote, metricField, false, authorSelect)
+    );
+  }
+
+  return uniqueAuthorsTopQuotes(
+    await fetchTopFromModel(PopularQuote, metricField, true, authorSelect)
+  );
 };
 
 /**
- * Today: count likes/comments created today.
- * Ties → earlier activity wins; one seat per person.
+ * Today: likes/comments on community quotes only when any community quotes exist;
+ * otherwise allow popular.
  */
 const loadTodayQuoteBoard = async (EdgeModel) => {
   const { start, end } = localDayBounds();
-  const authorSelect = `${AUTHOR_SELECT} qotdStars`;
+  const usePopularFallback = !(await hasAnyCommunityQuote());
 
   const grouped = await EdgeModel.aggregate([
     { $match: { createdAt: { $gte: start, $lte: end } } },
@@ -131,66 +154,38 @@ const loadTodayQuoteBoard = async (EdgeModel) => {
 
   if (!grouped.length) return [];
 
-  const ids = grouped.map((row) => row._id);
-  const quotes = await Quote.find({
-    _id: { $in: ids },
-  })
-    .populate("author", authorSelect)
-    .lean();
-
-  const quoteMap = new Map(quotes.map((q) => [q._id.toString(), q]));
   const ranked = [];
   for (const row of grouped) {
-    const quote = quoteMap.get(row._id.toString());
-    if (!quote) continue;
-    ranked.push(serializeQuoteAward(quote, row.count));
+    const found = await findQuoteDocById(row._id, { lean: true });
+    if (!found?.doc) continue;
+    if (!usePopularFallback && found.isPopular) continue;
+    if (usePopularFallback && !found.isPopular) continue;
+    ranked.push(
+      serializeQuoteAward(found.doc, row.count, found.isPopular)
+    );
   }
   return uniqueAuthorsTopQuotes(ranked);
 };
 
-/** Stars are always lifetime; ties → earlier first QOTD win. */
+/** Stars = times a creator’s quote (community or popular) was Quote of the Day. */
 const loadStarLeaders = async () => {
-  const rows = await QuoteOfTheDay.aggregate([
-    {
-      $lookup: {
-        from: "quotes",
-        localField: "quote",
-        foreignField: "_id",
-        as: "quoteDoc",
-      },
-    },
-    { $unwind: "$quoteDoc" },
-    {
-      $match: {
-        usedPopular: { $ne: true },
-      },
-    },
-    {
-      $group: {
-        _id: "$quoteDoc.author",
-        stars: { $sum: 1 },
-        firstAt: { $min: "$selectedAt" },
-      },
-    },
-    { $match: { stars: { $gt: 0 } } },
-    { $sort: { stars: -1, firstAt: 1 } },
-    { $limit: LEADERBOARD_LIMIT },
-  ]);
-
-  if (!rows.length) return [];
-
-  const users = await User.find({ _id: { $in: rows.map((r) => r._id) } })
+  let users = await User.find({ qotdStars: { $gt: 0 } })
+    .sort({ qotdStars: -1, createdAt: 1 })
+    .limit(LEADERBOARD_LIMIT)
     .select("name username profilePicture qotdStars bio")
     .lean();
-  const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
-  return rows
-    .map((row, index) => {
-      const user = userMap.get(row._id.toString());
-      if (!user) return null;
-      return serializePerson({ ...user, qotdStars: row.stars }, index + 1);
-    })
-    .filter(Boolean);
+  // Older popular QOTDs were saved without awarding stars — rebuild once.
+  if (!users.length) {
+    await syncQotdStarsFromHistory();
+    users = await User.find({ qotdStars: { $gt: 0 } })
+      .sort({ qotdStars: -1, createdAt: 1 })
+      .limit(LEADERBOARD_LIMIT)
+      .select("name username profilePicture qotdStars bio")
+      .lean();
+  }
+
+  return users.map((user, index) => serializePerson(user, index + 1));
 };
 
 const packQuoteBoard = (leaderboard) => ({
@@ -198,22 +193,60 @@ const packQuoteBoard = (leaderboard) => ({
   leaderboard,
 });
 
+const serializeTodayQotd = (doc) => {
+  if (!doc?.quote) return null;
+  const q = doc.quote;
+  return {
+    date: doc.date,
+    sourceDate: doc.sourceDate,
+    usedPopular: Boolean(doc.usedPopular || q.isPopular),
+    score: doc.score || 0,
+    quote: {
+      _id: q._id,
+      text: q.text,
+      category: q.category || "",
+      language: q.language || "english",
+      likesCount: q.likesCount || 0,
+      commentsCount: q.commentsCount || 0,
+      isPopular: Boolean(q.isPopular),
+      attributedTo: q.attributedTo || "",
+      author: q.author
+        ? {
+            _id: q.author._id,
+            name: q.author.name,
+            username: q.author.username,
+            profilePicture: q.author.profilePicture,
+            qotdStars: q.author.qotdStars || 0,
+          }
+        : null,
+    },
+  };
+};
+
 /**
  * Public awards leaderboard (top 3 only).
- * Response includes both today + overall quote boards; stars are lifetime.
+ * Response includes today + overall quote boards, QOTD stars, and today's QOTD.
  */
 export const loadAwardsLeaderboard = async (_req, res) => {
   try {
-    const [overallLiked, overallCommented, todayLiked, todayCommented, stars] =
-      await Promise.all([
-        loadOverallQuoteBoard("likesCount"),
-        loadOverallQuoteBoard("commentsCount"),
-        loadTodayQuoteBoard(QuoteLike),
-        loadTodayQuoteBoard(Comment),
-        loadStarLeaders(),
-      ]);
+    const [
+      overallLiked,
+      overallCommented,
+      todayLiked,
+      todayCommented,
+      stars,
+      qotdDoc,
+    ] = await Promise.all([
+      loadOverallQuoteBoard("likesCount"),
+      loadOverallQuoteBoard("commentsCount"),
+      loadTodayQuoteBoard(QuoteLike),
+      loadTodayQuoteBoard(Comment),
+      loadStarLeaders(),
+      getQuoteOfTheDay(),
+    ]);
 
     res.json({
+      quoteOfTheDay: serializeTodayQotd(qotdDoc),
       overall: {
         mostLiked: packQuoteBoard(overallLiked),
         mostCommented: packQuoteBoard(overallCommented),

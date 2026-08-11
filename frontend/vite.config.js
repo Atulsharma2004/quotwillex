@@ -16,6 +16,7 @@ Allow: /contact
 Allow: /guidelines
 Allow: /signup
 Allow: /profile/
+Allow: /llms.txt
 
 Disallow: /login
 Disallow: /auth/

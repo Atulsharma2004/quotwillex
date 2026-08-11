@@ -42,15 +42,9 @@ import {
   serializeQuotesForViewer,
   USER_CARD_SELECT,
 } from "../utils/quoteSerializer.js";
+import { createAccessToken } from "../utils/accessToken.js";
 
-const createToken = (user) =>
-  jwt.sign(
-    { id: user._id, tv: user.tokenVersion || 0 },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: "1d",
-    }
-  );
+const createToken = (user) => createAccessToken(user);
 
 const findUserIdFromKey = async (key) => {
   const resolved = resolveProfileKey(key);

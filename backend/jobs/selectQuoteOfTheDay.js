@@ -67,19 +67,6 @@ const findLatestCommunityDay = async (beforeDayKey) => {
   return toDayKey(new Date(latest.createdAt));
 };
 
-/**
- * True when there are zero community posts in the last 3
- * calendar days ending yesterday (relative to the display day).
- */
-const hasNoCommunityPostsInLast3Days = async (displayDayKey) => {
-  const rangeStart = dayBounds(addDays(displayDayKey, -3)).start;
-  const rangeEnd = dayBounds(previousDayKey(displayDayKey)).end;
-  const count = await Quote.countDocuments({
-    createdAt: { $gte: rangeStart, $lte: rangeEnd },
-  });
-  return count === 0;
-};
-
 const loadRecentPopularQuotes = async (displayDayKey, limit = 40) => {
   const until = dayBounds(previousDayKey(displayDayKey)).end;
   return PopularQuote.find({
@@ -138,8 +125,8 @@ const hydrateQotdDoc = async (doc) => {
  * At local midnight, select today's Quote of the Day from yesterday's posts.
  * Display day = today (shown until 11:59 PM). Source day = previous day.
  *
- * Popular quotes are excluded unless there were no community posts in the
- * last 3 days — then popular quotes may be used as a last resort.
+ * Popular quotes are used only when there are zero community quotes in the DB.
+ * If even one community quote exists, popular is never considered.
  */
 export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
   const displayDayKey = toDayKey(targetDate);
@@ -158,8 +145,8 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
   }
 
   if (!quotes.length) {
-    const allowPopular = await hasNoCommunityPostsInLast3Days(displayDayKey);
-    if (allowPopular) {
+    const communityCount = await Quote.countDocuments({});
+    if (communityCount === 0) {
       quotes = await loadQuotesForDay(expectedSourceDay, { popularOnly: true });
       if (!quotes.length) {
         quotes = await loadRecentPopularQuotes(displayDayKey);
@@ -178,7 +165,7 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
   const { winner, method } = await pickWinner(displayDayKey, quotes);
 
   const previous = await QuoteOfTheDay.findOne({ date: displayDayKey })
-    .select("starAwarded quote")
+    .select("starAwarded quote usedPopular")
     .lean();
 
   const rawDoc = await QuoteOfTheDay.findOneAndUpdate(
@@ -191,16 +178,23 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
       method,
       usedPopular,
       selectedAt: new Date(),
+      // Allow a community winner to earn a star after replacing a popular fallback.
+      ...(previous?.usedPopular && !usedPopular
+        ? { starAwarded: false }
+        : {}),
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
   const doc = await hydrateQotdDoc(rawDoc);
 
-  if (!previous?.starAwarded) {
-    const isPopularWinner = Boolean(doc?.quote?.isPopular || usedPopular);
+  const fresh = await QuoteOfTheDay.findById(rawDoc._id)
+    .select("starAwarded")
+    .lean();
+  if (!fresh?.starAwarded) {
     const authorId = doc?.quote?.author?._id || doc?.quote?.author;
-    if (authorId && !isPopularWinner) {
+    // Community and popular uploaders both earn a star when their post is QOTD.
+    if (authorId) {
       await User.updateOne({ _id: authorId }, { $inc: { qotdStars: 1 } });
     }
     await QuoteOfTheDay.updateOne(
@@ -215,16 +209,13 @@ export const selectQuoteOfTheDay = async (targetDate = new Date()) => {
 
 /** Rebuild user qotdStars from QuoteOfTheDay history (idempotent). */
 export const syncQotdStarsFromHistory = async () => {
-  const rows = await QuoteOfTheDay.find()
-    .select("quote starAwarded usedPopular")
-    .lean();
+  const rows = await QuoteOfTheDay.find().select("quote").lean();
 
   const counts = new Map();
   for (const row of rows) {
-    if (row.usedPopular) continue;
     const found = await findQuoteDocByIdRaw(row.quote);
-    if (!found || found.isPopular) continue;
-    const authorId = found.doc.author?.toString();
+    if (!found) continue;
+    const authorId = (found.doc.author?._id || found.doc.author)?.toString();
     if (!authorId) continue;
     counts.set(authorId, (counts.get(authorId) || 0) + 1);
   }
@@ -244,13 +235,22 @@ export const getQuoteOfTheDay = async (targetDate = new Date()) => {
   let raw = await QuoteOfTheDay.findOne({ date: displayDayKey });
   let doc = await hydrateQotdDoc(raw);
 
-  if (!doc?.quote) {
+  const communityExists = await Quote.exists({});
+  const isPopularSelection = Boolean(
+    doc?.usedPopular || doc?.quote?.isPopular
+  );
+
+  // If community quotes exist, never keep a popular fallback for today.
+  if (!doc?.quote || (communityExists && isPopularSelection)) {
     doc = await selectQuoteOfTheDay(targetDate);
   }
 
   if (!doc?.quote) {
     raw = await QuoteOfTheDay.findOne().sort({ date: -1 });
     doc = await hydrateQotdDoc(raw);
+    if (communityExists && (doc?.usedPopular || doc?.quote?.isPopular)) {
+      return null;
+    }
   }
 
   return doc;

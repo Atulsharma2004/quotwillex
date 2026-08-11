@@ -119,13 +119,17 @@ const Header = () => {
           className="group flex shrink-0 items-center gap-2 font-bold text-slate-900 dark:text-white"
           onClick={() => setMenuOpen(false)}
         >
-          <img
-            src="/quotwellix-logo.png"
-            alt="Quotwellix"
-            className="h-9 w-9 rounded-xl object-cover shadow-sm transition group-hover:scale-105 group-hover:shadow-md"
-            width={36}
-            height={36}
-          />
+          <picture>
+            <source srcSet="/quotwellix-mark.webp" type="image/webp" />
+            <img
+              src="/quotwellix-mark.png"
+              alt="Quotwellix"
+              className="h-9 w-9 rounded-xl object-cover shadow-sm transition group-hover:scale-105 group-hover:shadow-md"
+              width={36}
+              height={36}
+              decoding="async"
+            />
+          </picture>
           <span className="text-lg tracking-tight">
             Quot
             <span className="text-[#C45C3A] dark:text-orange-300">wellix</span>

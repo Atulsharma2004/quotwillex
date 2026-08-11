@@ -21,12 +21,25 @@ const ensureMeta = (attr, key, content) => {
   el.setAttribute("content", content);
 };
 
-const ensureLink = (rel, href) => {
+const ensureLink = (rel, href, attrs = {}) => {
   if (!href) return;
-  let el = document.head.querySelector(`link[rel="${rel}"]`);
+  const attrEntries = Object.entries(attrs);
+  let el = null;
+  if (attrEntries.length) {
+    const selector = [
+      `link[rel="${rel}"]`,
+      ...attrEntries.map(
+        ([k, v]) => `[${k}="${String(v).replace(/"/g, '\\"')}"]`
+      ),
+    ].join("");
+    el = document.head.querySelector(selector);
+  } else {
+    el = document.head.querySelector(`link[rel="${rel}"]`);
+  }
   if (!el) {
     el = document.createElement("link");
     el.setAttribute("rel", rel);
+    attrEntries.forEach(([k, v]) => el.setAttribute(k, v));
     document.head.appendChild(el);
   }
   el.setAttribute("href", href);
@@ -74,7 +87,12 @@ const Seo = ({
     ensureMeta("name", "description", description);
     ensureMeta("name", "keywords", SITE_KEYWORDS);
     ensureMeta("name", "author", SITE_NAME);
-    ensureMeta("name", "robots", noindex ? "noindex, nofollow" : indexRobots);
+    ensureMeta("http-equiv", "content-language", "en-IN,hi-IN");
+    ensureMeta(
+      "name",
+      "robots",
+      noindex ? "noindex, nofollow" : indexRobots
+    );
     ensureMeta(
       "name",
       "googlebot",
@@ -88,7 +106,7 @@ const Seo = ({
     ensureMeta("property", "og:url", url);
     ensureMeta("property", "og:image", imageUrl);
     ensureMeta("property", "og:image:alt", `${SITE_NAME} — ${description.slice(0, 110)}`);
-    ensureMeta("property", "og:locale", "en_US");
+    ensureMeta("property", "og:locale", "en_IN");
     ensureMeta("property", "og:locale:alternate", "hi_IN");
 
     ensureMeta("name", "twitter:card", "summary_large_image");
@@ -98,15 +116,24 @@ const Seo = ({
     ensureMeta("name", "twitter:image:alt", SITE_NAME);
 
     ensureLink("canonical", url);
+    ensureLink("alternate", url, { hreflang: "en" });
+    ensureLink("alternate", url, { hreflang: "en-IN" });
+    ensureLink("alternate", url, { hreflang: "hi" });
+    ensureLink("alternate", url, { hreflang: "hi-IN" });
+    ensureLink("alternate", url, { hreflang: "x-default" });
 
     const websiteLd = {
       "@context": "https://schema.org",
       "@type": "WebSite",
       name: SITE_NAME,
-      alternateName: "Quotwellix Quotes",
+      alternateName: [
+        "Quotwellix Quotes",
+        "क्वॉटवेलिक्स",
+        "हिंदी कोट्स प्लेटफ़ॉर्म",
+      ],
       url: `${siteUrl}/`,
       description: SITE_DESCRIPTION,
-      inLanguage: ["en", "hi"],
+      inLanguage: ["en", "hi", "en-IN", "hi-IN"],
       potentialAction: {
         "@type": "SearchAction",
         target: `${absoluteUrl("/popular-quotes")}?search={search_term_string}`,
@@ -126,7 +153,11 @@ const Seo = ({
         "@type": "ContactPoint",
         email: SUPPORT_EMAIL,
         contactType: "customer support",
-        availableLanguage: ["English", "Hindi"],
+        availableLanguage: ["English", "Hindi", "en", "hi"],
+      },
+      areaServed: {
+        "@type": "Country",
+        name: "India",
       },
     };
 

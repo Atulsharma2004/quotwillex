@@ -12,6 +12,7 @@ import Seo from "../components/Seo";
 import { SEO_ROUTES } from "../constants/site";
 import { AwardsSkeleton } from "../components/Shimmer";
 import ProfileAvatar from "../components/ProfileAvatar";
+import QuoteOfTheDayCard from "../components/QuoteOfTheDayCard";
 import { profilePath } from "../utils/profileKey";
 import quoteService from "../redux/quotes/quoteService";
 
@@ -175,6 +176,7 @@ const Awards = () => {
   const liked = scope?.mostLiked?.leaderboard || [];
   const commented = scope?.mostCommented?.leaderboard || [];
   const stars = data?.qotdStars?.leaderboard || [];
+  const quoteOfTheDay = data?.quoteOfTheDay || null;
 
   return (
     <div className="awards-page relative min-h-[70vh] overflow-hidden px-4 py-10">
@@ -237,6 +239,24 @@ const Awards = () => {
 
         {!loading && !error && (
           <div key={range} className="space-y-12">
+            <section className="awards-section">
+              <div className="awards-section-head">
+                <FaStar className="text-amber-500" />
+                <h2>Quote of the Day</h2>
+                <span className="awards-pill">Today</span>
+              </div>
+              <p className="mb-4 text-center text-xs text-slate-500 dark:text-slate-400 sm:text-left">
+                Featured line on the home page right now
+              </p>
+              {quoteOfTheDay?.quote ? (
+                <div className="mx-auto max-w-xl">
+                  <QuoteOfTheDayCard data={quoteOfTheDay} compact />
+                </div>
+              ) : (
+                <EmptyPodium label="No Quote of the Day selected yet." />
+              )}
+            </section>
+
             <section className="awards-section">
               <div className="awards-section-head">
                 <FaStar className="text-amber-500" />

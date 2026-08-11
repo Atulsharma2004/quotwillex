@@ -1,5 +1,4 @@
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import {
   createEmailToken,
@@ -9,16 +8,12 @@ import {
   sendPasswordChangedEmail,
   isTransactionalMailConfigured,
 } from "../utils/mail.js";
+import { createAccessToken } from "../utils/accessToken.js";
 
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
 
-const signAccessToken = (user) =>
-  jwt.sign(
-    { id: user._id, tv: user.tokenVersion || 0 },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+const signAccessToken = (user) => createAccessToken(user);
 
 export const verifyEmail = async (req, res) => {
   try {

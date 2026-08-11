@@ -1,8 +1,14 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import authService from "./authService";
+import {
+  getValidStoredToken,
+  clearAuthStorage,
+  isAccessTokenValid,
+} from "../../utils/accessToken";
 
 const getStoredUser = () => {
   try {
+    if (!getValidStoredToken()) return null;
     return JSON.parse(localStorage.getItem("user")) || null;
   } catch {
     return null;
@@ -11,11 +17,12 @@ const getStoredUser = () => {
 
 const initialState = {
   user: getStoredUser(),
-  token: localStorage.getItem("token") || null,
+  token: getValidStoredToken(),
   isLoading: false,
   isSuccess: false,
   isError: false,
   message: "",
+  sessionChecked: !getValidStoredToken(),
 };
 
 const getErrorMessage = (error) =>
@@ -71,6 +78,25 @@ export const completeOAuthLogin = createAsyncThunk(
 export const logout = createAsyncThunk("auth/logout", async () => {
   authService.logout();
 });
+
+/** Confirm stored JWT still works with the API; clear session if not. */
+export const bootstrapSession = createAsyncThunk(
+  "auth/bootstrapSession",
+  async (_, thunkAPI) => {
+    const token = getValidStoredToken();
+    if (!token) {
+      clearAuthStorage();
+      return null;
+    }
+    try {
+      const profile = await authService.getProfile({ lite: 1 });
+      return profile;
+    } catch (error) {
+      clearAuthStorage();
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
 
 export const fetchProfile = createAsyncThunk(
   "auth/fetchProfile",
@@ -175,13 +201,45 @@ const authSlice = createSlice({
     },
     setAccessToken: (state, action) => {
       const token = action.payload;
-      if (!token) return;
+      if (!token || !isAccessTokenValid(token)) return;
       state.token = token;
       localStorage.setItem("token", token);
+    },
+    clearSession: (state) => {
+      state.user = null;
+      state.token = null;
+      state.isSuccess = false;
+      state.sessionChecked = true;
+      clearAuthStorage();
     },
   },
   extraReducers: (builder) => {
     builder
+      .addCase(bootstrapSession.pending, (state) => {
+        state.sessionChecked = false;
+      })
+      .addCase(bootstrapSession.fulfilled, (state, action) => {
+        state.sessionChecked = true;
+        if (!action.payload) {
+          state.user = null;
+          state.token = null;
+          return;
+        }
+        const slim = { ...(action.payload || {}) };
+        delete slim.posts;
+        delete slim.postsPagination;
+        if (slim.following === undefined && state.user?.following) {
+          slim.following = state.user.following;
+        }
+        state.user = { ...(state.user || {}), ...slim };
+        state.token = getValidStoredToken();
+        localStorage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(bootstrapSession.rejected, (state) => {
+        state.sessionChecked = true;
+        state.user = null;
+        state.token = null;
+      })
       .addCase(register.pending, (state) => {
         state.isLoading = true;
         state.isError = false;
@@ -306,6 +364,11 @@ const authSlice = createSlice({
   },
 });
 
-export const { reset, patchFollowingLocal, syncAuthUser, setAccessToken } =
-  authSlice.actions;
+export const {
+  reset,
+  patchFollowingLocal,
+  syncAuthUser,
+  setAccessToken,
+  clearSession,
+} = authSlice.actions;
 export default authSlice.reducer;

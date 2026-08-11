@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import Profile from "./pages/Profile.jsx";
 import Signup from "./pages/Signup.jsx";
 import Login from "./pages/Login.jsx";
@@ -17,8 +19,18 @@ import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import PrivateRoute from "./components/PrivateRoute.jsx";
+import { bootstrapSession } from "./redux/auth/authSlice";
 
 function App() {
+  const dispatch = useDispatch();
+  const token = useSelector((state) => state.auth.token);
+
+  useEffect(() => {
+    if (token) {
+      dispatch(bootstrapSession());
+    }
+  }, [dispatch, token]);
+
   return (
     <Router>
       <div className="min-h-screen flex flex-col app-shell bg-[var(--page-bg)] text-[var(--text)]">
