@@ -7,6 +7,7 @@ import {
   FaFire,
   FaHeart,
   FaLandmark,
+  FaMobileAlt,
   FaPenNib,
   FaQuoteLeft,
   FaShieldAlt,
@@ -20,14 +21,20 @@ import GoogleSignInButton from "../components/GoogleSignInButton";
 import QuoteOfTheDayCard from "../components/QuoteOfTheDayCard";
 import { QotdSkeleton } from "../components/Shimmer";
 import quoteService from "../redux/quotes/quoteService";
+import GetAppButton from "../components/GetAppButton";
 
 const CATEGORIES = [
-  { label: "Motivation", slug: "motivation", tone: "from-blue-500 to-indigo-500" },
-  { label: "Wisdom", slug: "wisdom", tone: "from-sky-500 to-blue-600" },
-  { label: "Love", slug: "love", tone: "from-rose-400 to-pink-500" },
-  { label: "Courage", slug: "courage", tone: "from-amber-400 to-orange-500" },
-  { label: "Peace", slug: "peace", tone: "from-teal-400 to-cyan-500" },
-  { label: "Hope", slug: "hope", tone: "from-violet-400 to-indigo-500" },
+  {
+    label: "Motivational quotes",
+    slug: "motivation",
+    to: "/motivational-quotes",
+    tone: "from-blue-500 to-indigo-500",
+  },
+  { label: "Wisdom quotes", slug: "wisdom", tone: "from-sky-500 to-blue-600" },
+  { label: "Love quotes", slug: "love", tone: "from-rose-400 to-pink-500" },
+  { label: "Courage quotes", slug: "courage", tone: "from-amber-400 to-orange-500" },
+  { label: "Peace quotes", slug: "peace", tone: "from-teal-400 to-cyan-500" },
+  { label: "Hope quotes", slug: "hope", to: "/inspirational-quotes", tone: "from-violet-400 to-indigo-500" },
 ];
 
 const FEATURES = [
@@ -49,7 +56,7 @@ const FEATURES = [
   {
     icon: FaLandmark,
     title: "Popular Classics",
-    body: "Explore timeless lines from famous minds in one place.",
+    body: "Explore popular quotes and timeless lines from famous minds in one place.",
   },
 ];
 
@@ -113,11 +120,11 @@ const QuoteMarquee = ({ quotes = [] }) => {
 
 const FeaturesSection = () => (
   <section className="relative px-4 py-16">
-    <SectionHeading
-      eyebrow="Why Quotwellix"
-      title="A quieter place for powerful words"
-      subtitle="Write, discover, and connect around quotes that actually stick."
-    />
+      <SectionHeading
+        eyebrow="Why Quotwellix"
+        title="A quieter place for motivational quotes"
+        subtitle="Write, discover, and connect around popular quotes and lines that actually stick."
+      />
     <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {FEATURES.map((feature, index) => {
         const Icon = feature.icon;
@@ -153,14 +160,17 @@ const CategoriesSection = ({
     <div className="relative mx-auto max-w-5xl">
       <SectionHeading
         eyebrow="Moods & themes"
-        title="Find the words you need today"
-        subtitle="Browse by feeling — from courage to calm — and keep inspiration close."
+      title="Find the quotes you need today"
+      subtitle="Browse motivational quotes, love quotes, wisdom, and more — in English and Hindi."
       />
       <div className="flex flex-wrap justify-center gap-3">
         {CATEGORIES.map((cat, index) => (
           <Link
             key={cat.label}
-            to={`${categoryBase}?category=${encodeURIComponent(cat.slug)}`}
+            to={
+              cat.to ||
+              `${categoryBase}?category=${encodeURIComponent(cat.slug)}`
+            }
             className={`home-card home-reveal inline-flex items-center rounded-full bg-gradient-to-r ${cat.tone} px-5 py-2.5 text-sm font-semibold text-white shadow-md`}
             style={{ animationDelay: `${0.12 + index * 0.06}s` }}
           >
@@ -234,9 +244,18 @@ const GuidelinesTeaser = () => (
             A few guidelines before you share
           </h2>
           <ul className="mt-3 space-y-1.5 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
-            <li>Keep quotes kind, meaningful, and free of abuse or hate.</li>
-            <li>Sexual, harassing, or offensive language is blocked automatically.</li>
-            <li>User ID is required; private details like phone and city are optional.</li>
+            <li>Sign up, pick a User ID, then share quotes in English or Hindi.</li>
+            <li>Guests can browse Popular and Awards; posting needs an account.</li>
+            <li>
+              Privacy, data, and content rules are in{" "}
+              <Link
+                to="/privacy"
+                className="font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+              >
+                Privacy &amp; Policy
+              </Link>
+              .
+            </li>
           </ul>
         </div>
         <div className="shrink-0">
@@ -246,6 +265,159 @@ const GuidelinesTeaser = () => (
           >
             Explore more <FaArrowRight className="text-xs" />
           </Link>
+        </div>
+      </div>
+    </div>
+  </section>
+);
+
+const QuoteDiscover = () => (
+  <section className="px-4 py-16">
+    <SectionHeading
+      eyebrow="Free to read"
+      title="Motivational quotes, popular quotes & Hindi lines"
+      subtitle="Open any collection — no account needed to browse."
+    />
+    <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2">
+      {[
+        {
+          to: "/motivational-quotes",
+          title: "Motivational quotes",
+          body: "Short motivational lines for work, study, and everyday courage — English and Hindi.",
+        },
+        {
+          to: "/popular-quotes",
+          title: "Popular quotes",
+          body: "Famous quotes and popular classics people still share today.",
+        },
+        {
+          to: "/inspirational-quotes",
+          title: "Inspirational quotes",
+          body: "Hope, peace, and daily inspiration — including quote of the day energy.",
+        },
+        {
+          to: "/hindi-quotes",
+          title: "Hindi quotes & सुविचार",
+          body: "हिंदी कोट्स, शायरी, अनमोल वचन और प्रेरक विचार in one place.",
+        },
+      ].map((item) => (
+        <Link
+          key={item.to}
+          to={item.to}
+          className="home-card rounded-2xl border border-blue-100 bg-white/90 p-5 transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+        >
+          <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-slate-100">
+            {item.title}
+          </h3>
+          <p className="text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+            {item.body}
+          </p>
+          <span className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+            Browse <FaArrowRight className="text-xs" />
+          </span>
+        </Link>
+      ))}
+    </div>
+  </section>
+);
+
+const QuotesFaq = () => (
+  <section className="px-4 pb-12">
+    <SectionHeading
+      eyebrow="FAQ"
+      title="Looking for quotes?"
+      subtitle="Quick answers for motivational lines, popular quotes, and Hindi suvichar."
+    />
+    <div className="mx-auto max-w-3xl space-y-4 text-left">
+      {[
+        {
+          q: "Where can I read motivational quotes for free?",
+          a: "Open Motivational quotes on Quotwellix for English and Hindi motivational lines. You can browse without signing in.",
+        },
+        {
+          q: "Does Quotwellix have popular quotes and famous quotes?",
+          a: "Yes. Popular quotes collects famous lines and classics, mixed with community quotes. Filter by category or language.",
+        },
+        {
+          q: "Can I read Hindi quotes and suvichar?",
+          a: "Yes. Hindi quotes includes हिंदी कोट्स, सुविचार, शायरी, and प्रेरक विचार.",
+        },
+      ].map((item) => (
+        <article
+          key={item.q}
+          className="rounded-2xl border border-indigo-100 bg-white/80 p-5 dark:border-slate-700 dark:bg-slate-900/70"
+        >
+          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-100">
+            {item.q}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+            {item.a}
+          </p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const HOME_FAQ_LD = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [
+    {
+      "@type": "Question",
+      name: "Where can I read motivational quotes for free?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Open Motivational quotes on Quotwellix for English and Hindi motivational lines. You can browse without signing in.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Does Quotwellix have popular quotes and famous quotes?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Popular quotes collects famous lines and classics, mixed with community quotes. Filter by category or language.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I read Hindi quotes and suvichar?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Hindi quotes includes Hindi quotes, suvichar, shayari, and prerak vichar.",
+      },
+    },
+  ],
+};
+
+const GetAppSection = () => (
+  <section className="px-4 py-12">
+    <div className="mx-auto max-w-4xl rounded-3xl border border-indigo-100 bg-white/80 p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900/70 sm:p-8">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="mb-2 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-indigo-500">
+            <FaMobileAlt className="text-[11px]" /> Home screen
+          </p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">
+            Get the Quotwellix app
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-gray-600 dark:text-slate-400">
+            Install it from this website — same as Chrome’s Install app suggestion.
+            Updates show up the next time you open it. No Play Store download needed.
+          </p>
+          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            Android: Chrome → Get App, or ⋮ → Install app. iPhone: Safari Share →
+            Add to Home Screen.{" "}
+            <Link
+              to="/guidelines#get-app"
+              className="font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+            >
+              Full steps
+            </Link>
+          </p>
+        </div>
+        <div className="shrink-0">
+          <GetAppButton variant="cta" />
         </div>
       </div>
     </div>
@@ -303,7 +475,6 @@ const Home = () => {
 
   const qotdJsonLd = quoteOfTheDay?.quote
     ? {
-        "@context": "https://schema.org",
         "@type": "Quotation",
         text: quoteOfTheDay.quote.text,
         spokenByCharacter: quoteOfTheDay.quote.attributedTo ||
@@ -317,6 +488,11 @@ const Home = () => {
         },
       }
     : null;
+
+  const homeJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [HOME_FAQ_LD, qotdJsonLd].filter(Boolean),
+  };
 
   if (user) {
     const quickActions = [
@@ -352,7 +528,7 @@ const Home = () => {
 
     return (
       <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <Seo {...SEO_ROUTES.home} jsonLd={qotdJsonLd} />
+        <Seo {...SEO_ROUTES.home} jsonLd={homeJsonLd} />
         <HomeBackdrop />
 
         <section className="relative px-4 pb-10 pt-12">
@@ -420,6 +596,7 @@ const Home = () => {
         </section>
 
         <QuoteMarquee quotes={showcaseQuotes} />
+        <QuoteDiscover />
 
         <CategoriesSection
           ctaTo="/quotes"
@@ -428,6 +605,7 @@ const Home = () => {
         />
 
         <GuidelinesTeaser />
+        <GetAppSection />
 
         <section className="relative px-4 pb-16 pt-4">
           <div className="home-shine mx-auto max-w-4xl overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 px-6 py-12 text-center text-white shadow-xl shadow-blue-500/20">
@@ -453,7 +631,7 @@ const Home = () => {
 
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-blue-50 via-indigo-50 to-sky-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-      <Seo {...SEO_ROUTES.home} jsonLd={qotdJsonLd} />
+      <Seo {...SEO_ROUTES.home} jsonLd={homeJsonLd} />
       <HomeBackdrop />
 
       <section className="relative flex min-h-[calc(100vh-72px)] items-center px-4 py-16">
@@ -461,15 +639,15 @@ const Home = () => {
           <p className="home-float home-reveal mb-4 inline-flex items-center gap-2 rounded-full border border-blue-200/80 bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 backdrop-blur dark:border-slate-600 dark:bg-slate-900/70 dark:text-blue-300">
             <FaStar className="text-[10px]" /> Daily inspiration
           </p>
-          <h1 className="home-shine home-reveal delay-1 mb-3 bg-gradient-to-r from-blue-700 via-indigo-600 to-sky-600 bg-clip-text text-5xl font-bold text-transparent sm:text-6xl dark:from-blue-300 dark:via-indigo-300 dark:to-sky-300">
+          <p className="home-shine home-reveal delay-1 mb-2 bg-gradient-to-r from-blue-700 via-indigo-600 to-sky-600 bg-clip-text text-5xl font-bold text-transparent sm:text-6xl dark:from-blue-300 dark:via-indigo-300 dark:to-sky-300">
             Quotwellix
-          </h1>
-          <p className="home-reveal delay-2 mb-2 text-2xl font-semibold text-gray-900 dark:text-slate-100 sm:text-3xl">
-            Share wisdom. Inspire others.
           </p>
+          <h1 className="home-reveal delay-1 mb-3 text-2xl font-bold text-gray-900 dark:text-slate-100 sm:text-3xl">
+            Motivational quotes, popular quotes & daily inspiration
+          </h1>
           <p className="home-reveal delay-2 mx-auto mb-8 max-w-2xl text-lg text-gray-600 dark:text-slate-400">
-            Discover meaningful quotes, follow thoughtful voices, and build a
-            quieter corner of the internet for words that matter.
+            Read famous quotes, motivational lines, हिंदी कोट्स and सुविचार —
+            then share your own. Free in English and Hindi.
           </p>
 
           <div className="home-reveal delay-3 mx-auto mb-8 w-full max-w-lg text-left">
@@ -550,13 +728,16 @@ const Home = () => {
       </section>
 
       <QuoteMarquee quotes={showcaseQuotes} />
+      <QuoteDiscover />
       <FeaturesSection />
       <CategoriesSection
         ctaTo="/popular-quotes"
         ctaLabel="Explore popular quotes"
       />
       <HowItWorksSection />
+      <QuotesFaq />
       <GuidelinesTeaser />
+      <GetAppSection />
 
       <section className="px-4 pb-20 pt-4">
         <div className="home-shine mx-auto max-w-4xl overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-sky-500 px-6 py-14 text-center text-white shadow-xl shadow-blue-500/25">

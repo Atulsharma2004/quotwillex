@@ -16,9 +16,14 @@ import {
 import {
   syncAuthUser,
   followUser,
+  cancelFollowRequest,
   unfollowUser,
+  acceptFollowRequest,
+  rejectFollowRequest,
+  followBack,
   updateProfile,
   patchFollowingLocal,
+  patchPendingFollowLocal,
 } from "../redux/auth/authSlice";
 import authService from "../redux/auth/authService";
 import quoteService from "../redux/quotes/quoteService";
@@ -400,6 +405,9 @@ const Profile = () => {
         targetSnapshot,
       })
     );
+    if (willFollow) {
+      dispatch(patchPendingFollowLocal({ targetId, requested: false }));
+    }
 
     setViewedProfile((prev) => {
       if (!prev) return prev;
@@ -408,6 +416,8 @@ const Profile = () => {
         return {
           ...prev,
           isFollowing: willFollow,
+          followRequested: false,
+          canFollowBack: willFollow ? false : prev.canFollowBack,
           followerCount: Math.max(
             0,
             (prev.followerCount || 0) + (willFollow ? 1 : -1)
@@ -447,57 +457,327 @@ const Profile = () => {
     });
   };
 
+  const applyOptimisticRequest = (targetId, requested) => {
+    dispatch(patchPendingFollowLocal({ targetId, requested }));
+    setViewedProfile((prev) => {
+      if (!prev || prev._id?.toString() !== targetId.toString()) return prev;
+      return {
+        ...prev,
+        followRequested: requested,
+        isFollowing: false,
+      };
+    });
+  };
+
   const handleFollowToggleProfile = () => {
     if (!viewedProfile?._id || isOwnProfile) return;
     const currentlyFollowing = !!viewedProfile.isFollowing;
-    const willFollow = !currentlyFollowing;
     const targetId = viewedProfile._id;
-
-    applyOptimisticFollow(targetId, willFollow, {
+    const snapshot = {
       _id: viewedProfile._id,
       name: viewedProfile.name,
       profilePicture: viewedProfile.profilePicture,
-    });
+      username: viewedProfile.username,
+    };
 
-    const action = currentlyFollowing
-      ? unfollowUser(targetId)
-      : followUser(targetId);
+    if (currentlyFollowing) {
+      applyOptimisticFollow(targetId, false, snapshot);
+      dispatch(unfollowUser(targetId)).then((result) => {
+        if (unfollowUser.rejected.match(result)) {
+          applyOptimisticFollow(targetId, true, snapshot);
+        }
+      });
+      return;
+    }
 
-    dispatch(action).then((result) => {
-      if (
-        followUser.rejected.match(result) ||
-        unfollowUser.rejected.match(result)
-      ) {
-        applyOptimisticFollow(targetId, currentlyFollowing, {
-          _id: viewedProfile._id,
-          name: viewedProfile.name,
-          profilePicture: viewedProfile.profilePicture,
-        });
+    // Send follow request (not instant follow)
+    applyOptimisticRequest(targetId, true);
+    dispatch(followUser(targetId)).then((result) => {
+      if (followUser.rejected.match(result)) {
+        applyOptimisticRequest(targetId, false);
+        return;
+      }
+      if (result.payload?.following) {
+        applyOptimisticRequest(targetId, false);
+        applyOptimisticFollow(targetId, true, snapshot);
       }
     });
   };
 
-  const handleFollowToggleInModal = (personId, currentlyFollowing) => {
-    const willFollow = !currentlyFollowing;
-    const person = modalUsers.find(
-      (u) => u._id?.toString() === personId.toString()
+  const handleCancelRequestProfile = () => {
+    if (!viewedProfile?._id || isOwnProfile) return;
+    const targetId = viewedProfile._id;
+    applyOptimisticRequest(targetId, false);
+    dispatch(cancelFollowRequest(targetId)).then((result) => {
+      if (cancelFollowRequest.rejected.match(result)) {
+        applyOptimisticRequest(targetId, true);
+      }
+    });
+  };
+
+  const handleAcceptIncoming = () => {
+    if (!viewedProfile?.incomingFollowRequestId) return;
+    const requestId = viewedProfile.incomingFollowRequestId;
+    setViewedProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            incomingFollowRequest: false,
+            incomingFollowRequestId: null,
+            followsYou: true,
+            canFollowBack: !prev.isFollowing,
+          }
+        : prev
     );
+    dispatch(acceptFollowRequest(requestId)).then((result) => {
+      if (acceptFollowRequest.rejected.match(result)) {
+        loadViewedProfile({ silent: true });
+        return;
+      }
+      const payload = result.payload || {};
+      // Accept = requester follows you. On their profile: only their followingCount changes.
+      setViewedProfile((prev) => {
+        if (!prev) return prev;
+        const requesterCounts = payload.requester;
+        const isRequesterProfile =
+          prev._id?.toString() === (payload.requesterId || "").toString();
+        return {
+          ...prev,
+          followsYou: true,
+          canFollowBack: payload.canFollowBack !== false,
+          incomingFollowRequest: false,
+          incomingFollowRequestId: null,
+          ...(isRequesterProfile && requesterCounts
+            ? {
+                followingCount: requesterCounts.followingCount,
+                followerCount: requesterCounts.followerCount,
+              }
+            : isRequesterProfile
+              ? {
+                  followingCount: (prev.followingCount || 0) + 1,
+                }
+              : {}),
+        };
+      });
+    });
+  };
+
+  const handleRejectIncoming = () => {
+    if (!viewedProfile?.incomingFollowRequestId) return;
+    const requestId = viewedProfile.incomingFollowRequestId;
+    setViewedProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            incomingFollowRequest: false,
+            incomingFollowRequestId: null,
+          }
+        : prev
+    );
+    dispatch(rejectFollowRequest(requestId)).then((result) => {
+      if (rejectFollowRequest.rejected.match(result)) {
+        loadViewedProfile({ silent: true });
+      }
+    });
+  };
+
+  const handleFollowBackProfile = () => {
+    if (!viewedProfile?._id) return;
+    const targetId = viewedProfile._id;
+    const snapshot = {
+      _id: viewedProfile._id,
+      name: viewedProfile.name,
+      profilePicture: viewedProfile.profilePicture,
+      username: viewedProfile.username,
+    };
+    // Follow back = I follow them → their followers +1, my following +1
+    applyOptimisticFollow(targetId, true, snapshot);
+    setViewedProfile((prev) =>
+      prev ? { ...prev, canFollowBack: false, followsYou: true } : prev
+    );
+    dispatch(followBack(targetId)).then((result) => {
+      if (followBack.rejected.match(result)) {
+        applyOptimisticFollow(targetId, false, snapshot);
+        setViewedProfile((prev) =>
+          prev ? { ...prev, canFollowBack: true } : prev
+        );
+        return;
+      }
+      const targetCounts = result.payload?.target;
+      if (targetCounts) {
+        setViewedProfile((prev) =>
+          prev && prev._id?.toString() === targetId.toString()
+            ? {
+                ...prev,
+                followerCount: targetCounts.followerCount,
+                followingCount: targetCounts.followingCount,
+                canFollowBack: false,
+                isFollowing: true,
+              }
+            : prev
+        );
+      }
+    });
+  };
+
+  const patchModalUserFlags = (personId, flags) => {
+    setModalUsers((prev) =>
+      prev.map((u) =>
+        u._id?.toString() === personId.toString() ? { ...u, ...flags } : u
+      )
+    );
+  };
+
+  const handleFollowToggleInModal = (person, relation = {}) => {
+    const personId = person?._id;
+    if (!personId) return;
+
+    const followedByMe = !!relation.followedByMe;
+    const followRequested = !!relation.followRequested;
+    const canFollowBack = !!relation.canFollowBack;
 
     setBusyId(personId);
-    applyOptimisticFollow(personId, willFollow, person);
 
-    const action = currentlyFollowing
-      ? unfollowUser(personId)
-      : followUser(personId);
+    const snapshot = {
+      _id: person._id,
+      name: person.name,
+      username: person.username,
+      profilePicture: person.profilePicture,
+    };
 
-    dispatch(action).then((result) => {
+    // Unfollow
+    if (followedByMe) {
+      const prevFlags = {
+        followedByMe: true,
+        followRequested: false,
+        canFollowBack: !!person.followsYou,
+        followsYou: !!person.followsYou,
+      };
+      patchModalUserFlags(personId, {
+        followedByMe: false,
+        followRequested: false,
+        canFollowBack: !!person.followsYou,
+      });
+      applyOptimisticFollow(personId, false, snapshot);
+      dispatch(unfollowUser(personId)).then((result) => {
+        setBusyId(null);
+        if (unfollowUser.rejected.match(result)) {
+          patchModalUserFlags(personId, prevFlags);
+          applyOptimisticFollow(personId, true, snapshot);
+          return;
+        }
+        // Own following list: remove row live
+        if (modalType === "following" && isOwnProfile) {
+          setModalUsers((prev) =>
+            prev.filter((u) => u._id?.toString() !== personId.toString())
+          );
+        }
+      });
+      return;
+    }
+
+    // Cancel pending request
+    if (followRequested) {
+      patchModalUserFlags(personId, {
+        followRequested: false,
+        followedByMe: false,
+        canFollowBack: !!person.followsYou,
+      });
+      dispatch(patchPendingFollowLocal({ targetId: personId, requested: false }));
+      dispatch(cancelFollowRequest(personId)).then((result) => {
+        setBusyId(null);
+        if (cancelFollowRequest.rejected.match(result)) {
+          patchModalUserFlags(personId, {
+            followRequested: true,
+            followedByMe: false,
+            canFollowBack: false,
+          });
+          dispatch(
+            patchPendingFollowLocal({ targetId: personId, requested: true })
+          );
+        }
+      });
+      return;
+    }
+
+    // Follow back (instant mutual edge)
+    if (canFollowBack) {
+      patchModalUserFlags(personId, {
+        followedByMe: true,
+        followRequested: false,
+        canFollowBack: false,
+        followsYou: true,
+      });
+      applyOptimisticFollow(personId, true, snapshot);
+      dispatch(followBack(personId)).then((result) => {
+        setBusyId(null);
+        if (followBack.rejected.match(result)) {
+          patchModalUserFlags(personId, {
+            followedByMe: false,
+            followRequested: false,
+            canFollowBack: true,
+            followsYou: true,
+          });
+          applyOptimisticFollow(personId, false, snapshot);
+          return;
+        }
+        const target = result.payload?.target;
+        if (target) {
+          patchModalUserFlags(personId, {
+            followedByMe: true,
+            canFollowBack: false,
+            followsYou: true,
+          });
+        }
+      });
+      return;
+    }
+
+    // Send follow request
+    patchModalUserFlags(personId, {
+      followRequested: true,
+      followedByMe: false,
+      canFollowBack: false,
+    });
+    dispatch(patchPendingFollowLocal({ targetId: personId, requested: true }));
+    dispatch(followUser(personId)).then((result) => {
       setBusyId(null);
-      if (
-        followUser.rejected.match(result) ||
-        unfollowUser.rejected.match(result)
-      ) {
-        applyOptimisticFollow(personId, currentlyFollowing, person);
+      if (followUser.rejected.match(result)) {
+        patchModalUserFlags(personId, {
+          followRequested: false,
+          followedByMe: false,
+          canFollowBack: !!person.followsYou,
+        });
+        dispatch(
+          patchPendingFollowLocal({ targetId: personId, requested: false })
+        );
+        return;
       }
+      if (result.payload?.following) {
+        patchModalUserFlags(personId, {
+          followedByMe: true,
+          followRequested: false,
+          canFollowBack: false,
+        });
+        dispatch(
+          patchPendingFollowLocal({ targetId: personId, requested: false })
+        );
+        applyOptimisticFollow(personId, true, snapshot);
+      }
+    });
+  };
+
+  const handleFollowToggleOnQuote = (
+    authorId,
+    currentlyFollowing,
+    author,
+    currentlyRequested
+  ) => {
+    if (!authorId) return;
+    handleFollowToggleInModal(author || { _id: authorId }, {
+      followedByMe: !!currentlyFollowing,
+      followRequested: !!currentlyRequested,
+      canFollowBack: false,
     });
   };
 
@@ -580,7 +860,7 @@ const Profile = () => {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-3 py-3 sm:px-4 sm:py-8">
       <Seo
         title={
           viewedProfile?.name
@@ -615,8 +895,15 @@ const Profile = () => {
         }
         isOwnProfile={isOwnProfile}
         isFollowing={!!viewedProfile.isFollowing}
+        followRequested={!!viewedProfile.followRequested}
+        incomingFollowRequest={!!viewedProfile.incomingFollowRequest}
+        canFollowBack={!!viewedProfile.canFollowBack}
         onOpenSettings={() => setShowEditProfile(true)}
         onFollowToggle={handleFollowToggleProfile}
+        onCancelRequest={handleCancelRequestProfile}
+        onAcceptRequest={handleAcceptIncoming}
+        onRejectRequest={handleRejectIncoming}
+        onFollowBack={handleFollowBackProfile}
         onOpenFollowers={() => setModalType("followers")}
         onOpenFollowing={() => setModalType("following")}
       />
@@ -654,7 +941,7 @@ const Profile = () => {
         </div>
       )}
 
-      <div className="mt-8 space-y-4">
+      <div className="mt-3 space-y-3 sm:mt-8 sm:space-y-4">
         {isOwnProfile &&
           (currentUser?.role === "admin" || viewedProfile?.canFilterPostTypes) && (
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-2 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -750,9 +1037,7 @@ const Profile = () => {
               onEditComment={handleEditComment}
               onSaveComment={handleSaveComment}
               onDeleteComment={handleDeleteComment}
-              onFollowToggle={(id, currentlyFollowing, person) =>
-                handleFollowToggleInModal(id, currentlyFollowing)
-              }
+              onFollowToggle={handleFollowToggleOnQuote}
               editQuoteId={editQuoteId}
               editText={editText}
               setEditText={setEditText}

@@ -8,6 +8,7 @@ import {
   FaEnvelope,
   FaHome,
   FaLandmark,
+  FaLock,
   FaQuoteLeft,
   FaRedo,
   FaShieldAlt,
@@ -50,18 +51,22 @@ const Footer = () => {
       return [
         { to: "/", label: "Home", icon: FaHome },
         { to: "/quotes", label: "Quotes", icon: FaQuoteLeft },
-        { to: "/popular-quotes", label: "Popular", icon: FaLandmark },
+        { to: "/popular-quotes", label: "Popular Quotes", icon: FaLandmark },
+        { to: "/motivational-quotes", label: "Motivational", icon: FaQuoteLeft },
         { to: "/awards", label: "Awards", icon: FaTrophy },
         { to: "/guidelines", label: "Guidelines", icon: FaShieldAlt },
+        { to: "/privacy", label: "Privacy & Policy", icon: FaLock },
         { to: "/contact", label: "Contact", icon: FaEnvelope },
         { to: "/profile", label: "Profile", icon: FaUser },
       ];
     }
     return [
       { to: "/", label: "Home", icon: FaHome },
-      { to: "/popular-quotes", label: "Popular", icon: FaLandmark },
+      { to: "/popular-quotes", label: "Popular Quotes", icon: FaLandmark },
+      { to: "/motivational-quotes", label: "Motivational", icon: FaQuoteLeft },
       { to: "/awards", label: "Awards", icon: FaTrophy },
       { to: "/guidelines", label: "Guidelines", icon: FaShieldAlt },
+      { to: "/privacy", label: "Privacy & Policy", icon: FaLock },
       { to: "/contact", label: "Contact", icon: FaEnvelope },
       { to: "/login", label: "Sign In", icon: FaUser },
       { to: "/signup", label: "Sign Up", icon: FaQuoteLeft },
@@ -209,6 +214,13 @@ const Footer = () => {
           className="underline decoration-indigo-400/50 underline-offset-2 transition hover:text-white"
         >
           Guidelines
+        </Link>
+        {" · "}
+        <Link
+          to="/privacy"
+          className="underline decoration-indigo-400/50 underline-offset-2 transition hover:text-white"
+        >
+          Privacy &amp; Policy
         </Link>
         {" · "}
         <a

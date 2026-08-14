@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   FaCalendarAlt,
@@ -37,13 +37,15 @@ import {
   OTHER_CATEGORY_VALUE,
   categoryLabel,
 } from "../constants/quoteCategories";
-import { SEO_ROUTES } from "../constants/site";
+import { absoluteUrl } from "../constants/site";
+import { SEO_LANDINGS } from "../constants/seoLandings";
 import { quoteUi, sortOptions } from "../constants/quoteUi";
 import FeedbackToast from "../components/FeedbackToast";
 
 const QUOTES_PER_PAGE = 10;
 
-const PopularQuotes = () => {
+const PopularQuotes = ({ landingKey = "popular" }) => {
+  const landing = SEO_LANDINGS[landingKey] || SEO_LANDINGS.popular;
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -74,7 +76,9 @@ const PopularQuotes = () => {
   const [editCustomCategory, setEditCustomCategory] = useState("");
   const [editSourceWork, setEditSourceWork] = useState("");
   const [deletingQuoteId, setDeletingQuoteId] = useState(null);
-  const initialCategory = String(searchParams.get("category") || "all")
+  const initialCategory = String(
+    searchParams.get("category") || landing.category || "all"
+  )
     .trim()
     .toLowerCase();
   const initialSearch = String(
@@ -84,7 +88,9 @@ const PopularQuotes = () => {
   const [categoryFilter, setCategoryFilter] = useState(
     initialCategory || "all"
   );
-  const [languageFilter, setLanguageFilter] = useState("all");
+  const [languageFilter, setLanguageFilter] = useState(
+    landing.language || "all"
+  );
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState("newest");
@@ -97,7 +103,9 @@ const PopularQuotes = () => {
     Boolean(dateTo);
 
   useEffect(() => {
-    const cat = String(searchParams.get("category") || "all")
+    const cat = String(
+      searchParams.get("category") || landing.category || "all"
+    )
       .trim()
       .toLowerCase();
     const q = String(
@@ -105,8 +113,11 @@ const PopularQuotes = () => {
     ).trim();
     setCategoryFilter(cat || "all");
     setSearchQuery(q);
+    if (!searchParams.get("category") && landing.language && landing.language !== "all") {
+      setLanguageFilter(landing.language);
+    }
     setCurrentPage(1);
-  }, [searchParams]);
+  }, [searchParams, landing.category, landing.language]);
 
   useEffect(() => {
     if (user) return;
@@ -180,6 +191,39 @@ const PopularQuotes = () => {
         activePage * QUOTES_PER_PAGE
       )
     : filteredQuotes;
+
+  const collectionLd = useMemo(
+    () => ({
+      "@context": "https://schema.org",
+      "@type": "CollectionPage",
+      name: landing.h1,
+      description: landing.description,
+      url: absoluteUrl(landing.path),
+      isPartOf: {
+        "@type": "WebSite",
+        name: "Quotwellix",
+        url: absoluteUrl("/"),
+      },
+      mainEntity: {
+        "@type": "ItemList",
+        numberOfItems: pageQuotes.length,
+        itemListElement: pageQuotes.slice(0, 12).map((quote, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          item: {
+            "@type": "Quotation",
+            text: quote.text,
+            spokenByCharacter:
+              quote.attributedTo ||
+              quote.author?.name ||
+              quote.authorName ||
+              "Unknown",
+          },
+        })),
+      },
+    }),
+    [landing, pageQuotes]
+  );
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -508,21 +552,30 @@ const PopularQuotes = () => {
 
   return (
     <div className="min-h-[70vh] p-4 sm:p-6">
-      <Seo {...SEO_ROUTES.popular} />
+      <Seo
+        title={landing.title}
+        description={landing.description}
+        path={landing.path}
+        jsonLd={collectionLd}
+      />
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 text-center">
           <FaLandmark className="mx-auto mb-3 text-3xl text-indigo-600" />
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-indigo-500">
-            Timeless words
+            English & Hindi quotes
           </p>
-          <h1 className="mt-1 text-3xl font-bold text-gray-900">
-            {guestMode ? "Explore Quotes" : "Popular Quotes"}
+          <h1 className="mt-1 text-3xl font-bold text-gray-900 dark:text-slate-100">
+            {landing.h1}
           </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {guestMode
-              ? "A free preview of up to 100 random quotes — popular classics mixed with community lines. Sign in for the full feeds and to post."
-              : "Public-domain and verified-attribution quotes shared by the admins. Browse famous lines in English and Hindi."}
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+            {landing.intro}
           </p>
+          {guestMode && (
+            <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+              Preview mixed popular classics and community lines. Sign in for the
+              full feeds and to post.
+            </p>
+          )}
           {!user && (
             <p className="mt-3 text-sm text-indigo-700">
               <Link

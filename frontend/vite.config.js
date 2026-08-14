@@ -14,6 +14,10 @@ Allow: /popular-quotes
 Allow: /awards
 Allow: /contact
 Allow: /guidelines
+Allow: /privacy
+Allow: /motivational-quotes
+Allow: /inspirational-quotes
+Allow: /hindi-quotes
 Allow: /signup
 Allow: /profile/
 Allow: /llms.txt
@@ -46,6 +50,24 @@ Sitemap: ${base}/sitemap.xml
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>${base}/motivational-quotes</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>${base}/inspirational-quotes</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>${base}/hindi-quotes</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>${base}/awards</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>daily</changefreq>
@@ -59,6 +81,12 @@ Sitemap: ${base}/sitemap.xml
   </url>
   <url>
     <loc>${base}/guidelines</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>${base}/privacy</loc>
     <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>

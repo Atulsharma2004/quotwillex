@@ -1,5 +1,6 @@
 import Comment from "../models/Comment.js";
 import Follow from "../models/Follow.js";
+import FollowRequest from "../models/FollowRequest.js";
 import Quote from "../models/Quote.js";
 import PopularQuote from "../models/PopularQuote.js";
 import QuoteDislike from "../models/QuoteDislike.js";
@@ -37,7 +38,7 @@ export const serializeQuotesForViewer = async (
     ),
   ];
 
-  const [likedSet, dislikedSet, followedAuthors, commentGroups] =
+  const [likedSet, dislikedSet, followedAuthors, pendingAuthors, commentGroups] =
     await Promise.all([
       viewer
         ? QuoteLike.find({ quote: { $in: ids }, user: viewer })
@@ -59,6 +60,16 @@ export const serializeQuotesForViewer = async (
             .select("following")
             .lean()
             .then((rows) => new Set(rows.map((r) => r.following.toString())))
+        : Promise.resolve(new Set()),
+      viewer && authorIds.length
+        ? FollowRequest.find({
+            from: viewer,
+            to: { $in: authorIds },
+            status: "pending",
+          })
+            .select("to")
+            .lean()
+            .then((rows) => new Set(rows.map((r) => r.to.toString())))
         : Promise.resolve(new Set()),
       Comment.aggregate([
         { $match: { quote: { $in: ids } } },
@@ -112,6 +123,8 @@ export const serializeQuotesForViewer = async (
     const likedByMe = likedSet.has(id);
     const dislikedByMe = dislikedSet.has(id);
     const followedByMe = authorId ? followedAuthors.has(authorId) : false;
+    const followRequested =
+      authorId && !followedByMe ? pendingAuthors.has(authorId) : false;
     const popularFlag =
       options.kind === "popular"
         ? true
@@ -128,6 +141,7 @@ export const serializeQuotesForViewer = async (
       likedByMe,
       dislikedByMe,
       followedByMe,
+      followRequested,
       likes: likedByMe && viewer ? [viewer] : [],
       dislikes: dislikedByMe && viewer ? [viewer] : [],
       comments: recent,
@@ -140,6 +154,11 @@ export const getFollowingIds = async (userId) => {
   return Follow.find({ follower: userId }).distinct("following");
 };
 
+export const getPendingFollowRequestIds = async (userId) => {
+  if (!userId) return [];
+  return FollowRequest.find({ from: userId, status: "pending" }).distinct("to");
+};
+
 export const buildAuthUserPayload = async (userDoc, options = {}) => {
   const user = userDoc.toObject ? userDoc.toObject() : { ...userDoc };
   delete user.password;
@@ -149,8 +168,12 @@ export const buildAuthUserPayload = async (userDoc, options = {}) => {
   delete user.passwordResetTokenHash;
   delete user.passwordResetExpires;
 
-  const skipFollowing = options.skipFollowing === true;
-  const followingIds = skipFollowing ? null : await getFollowingIds(user._id);
+  // Always load following + pending request ID arrays (cheap distinct queries).
+  // skipFollowing is kept for callers but no longer omits the ID list.
+  const [followingIds, pendingIds] = await Promise.all([
+    getFollowingIds(user._id),
+    getPendingFollowRequestIds(user._id),
+  ]);
 
   return {
     ...user,
@@ -158,9 +181,9 @@ export const buildAuthUserPayload = async (userDoc, options = {}) => {
     canChangePassword: (user.authProvider || "local") !== "google",
     role: resolveEffectiveRole(user.email),
     followerCount: user.followerCount || 0,
-    followingCount:
-      followingIds != null ? followingIds.length : user.followingCount || 0,
-    following: followingIds != null ? followingIds : undefined,
+    followingCount: followingIds.length,
+    following: followingIds.map((id) => id.toString()),
+    pendingFollowRequests: pendingIds.map((id) => id.toString()),
     followers: [],
     needsProfileDetails: isPrivateProfileIncomplete(user),
     needsUsername: !user.username,

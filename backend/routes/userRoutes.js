@@ -8,13 +8,22 @@ import {
   updateUser,
   getProfile,
   getUserById,
-  followUser,
-  unfollowUser,
   checkUsername,
   searchUsers,
   listFollowers,
   listFollowing,
 } from "../controllers/userController.js";
+import {
+  requestFollow,
+  cancelFollowRequest,
+  unfollowUser,
+  acceptFollowRequest,
+  rejectFollowRequest,
+  followBack,
+  listNotifications,
+  getUnreadNotificationCount,
+  markNotificationsRead,
+} from "../controllers/followController.js";
 import {
   verifyEmail,
   resendVerification,
@@ -57,8 +66,26 @@ router.put("/profile", authMiddleware, updateUser);
 router.get("/profile", authMiddleware, getProfile);
 router.get("/profile/followers", authMiddleware, listFollowers);
 router.get("/profile/following", authMiddleware, listFollowing);
-router.put("/follow/:id", authMiddleware, followUser);
+
+router.get("/notifications", authMiddleware, listNotifications);
+router.get("/notifications/unread-count", authMiddleware, getUnreadNotificationCount);
+router.post("/notifications/read", authMiddleware, markNotificationsRead);
+
+router.put("/follow/:id", authMiddleware, requestFollow);
+router.put("/follow-request/:id/cancel", authMiddleware, cancelFollowRequest);
+router.put(
+  "/follow-request/:requestId/accept",
+  authMiddleware,
+  acceptFollowRequest
+);
+router.put(
+  "/follow-request/:requestId/reject",
+  authMiddleware,
+  rejectFollowRequest
+);
+router.put("/follow-back/:id", authMiddleware, followBack);
 router.put("/unfollow/:id", authMiddleware, unfollowUser);
+
 router.get("/:id/followers", authMiddleware, listFollowers);
 router.get("/:id/following", authMiddleware, listFollowing);
 router.get("/:id", authMiddleware, getUserById);

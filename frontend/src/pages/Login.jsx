@@ -102,81 +102,123 @@ const Login = () => {
   };
 
   return (
-    <div className="text-center p-5 bg-gradient-to-br from-blue-50 to-indigo-100 min-h-[70vh]">
+    <div className="flex min-h-[100dvh] flex-col bg-gradient-to-br from-blue-50 to-indigo-100 md:min-h-[70vh] dark:from-slate-950 dark:to-slate-900">
       <Seo {...SEO_ROUTES.login} />
-      <h1 className="text-2xl font-bold text-gray-900">Login</h1>
-      {info && <p className="text-green-700 mt-2 text-sm">{info}</p>}
-      {(isError || oauthError) && (
-        <p className="text-red-600 mt-2">{oauthError || message}</p>
-      )}
-      {unverifiedEmail && (
-        <div className="mt-3 text-sm">
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={resending}
-            className="font-semibold text-blue-700 underline disabled:opacity-60"
-          >
-            {resending ? "Sending..." : "Resend verification email"}
-          </button>
-          {resendMsg && <p className="mt-1 text-gray-700">{resendMsg}</p>}
-        </div>
-      )}
-      <div className="bg-white/90 w-3/4 max-w-xl m-auto p-8 rounded-xl shadow-sm mt-8 border border-blue-100">
-        <div className="mb-6 flex justify-center">
-          <GoogleSignInButton />
-        </div>
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex-1 h-px bg-gray-300" />
-          <span className="text-sm text-gray-600">or continue with email / User ID</span>
-          <div className="flex-1 h-px bg-gray-300" />
-        </div>
+      {/* Mobile-only top brand bar (header hidden on small screens) */}
+      <div className="flex items-center justify-between border-b border-indigo-100/80 bg-white/90 px-4 py-3 backdrop-blur md:hidden dark:border-slate-700 dark:bg-slate-900/90">
+        <Link to="/" className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+          <picture>
+            <source srcSet="/quotwellix-mark.webp" type="image/webp" />
+            <img
+              src="/quotwellix-mark.png"
+              alt=""
+              className="h-8 w-8 rounded-lg object-cover"
+              width={32}
+              height={32}
+            />
+          </picture>
+          <span>
+            Quot<span className="text-[#C45C3A] dark:text-orange-300">wellix</span>
+          </span>
+        </Link>
+        <Link
+          to="/signup"
+          className="text-sm font-semibold text-indigo-600 dark:text-indigo-300"
+        >
+          Sign Up
+        </Link>
+      </div>
 
-        <form onSubmit={handleSubmit}>
-          <input
-            type="text"
-            name="email"
-            placeholder="Email or User ID"
-            required
-            value={formData.email}
-            onChange={handleChange}
-            className="w-3/4 px-2 py-1 font-bold text-md mb-4 rounded-md border"
-          />
-          <br />
-          <PasswordField
-            name="password"
-            placeholder="Password"
-            required
-            autoComplete="current-password"
-            value={formData.password}
-            onChange={handleChange}
-            wrapperClassName="relative mb-4 inline-block w-3/4 text-left align-top"
-            className="px-2 py-1 font-bold text-md rounded-md border"
-          />
-          <br />
-          <div className="w-3/4 mx-auto text-right mb-2">
-            <Link
-              to="/forgot-password"
-              className="text-sm font-semibold text-blue-600"
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center px-4 py-6 text-center sm:px-6 md:p-5">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 md:text-3xl">
+          Sign In
+        </h1>
+        {info && <p className="mt-2 text-sm text-green-700 dark:text-green-400">{info}</p>}
+        {(isError || oauthError) && (
+          <p className="mt-2 text-red-600">{oauthError || message}</p>
+        )}
+        {unverifiedEmail && (
+          <div className="mt-3 text-sm">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resending}
+              className="font-semibold text-blue-700 underline disabled:opacity-60"
             >
-              Forgot password?
-            </Link>
+              {resending ? "Sending..." : "Resend verification email"}
+            </button>
+            {resendMsg && <p className="mt-1 text-gray-700 dark:text-slate-300">{resendMsg}</p>}
           </div>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-blue-600 text-white px-2 py-1 w-3/4 rounded-md mb-1 mt-2 disabled:opacity-60"
-          >
-            {isLoading ? "Logging in..." : "Login"}
-          </button>
-        </form>
-        <p className="mt-2">
-          Don&apos;t have an account?{" "}
-          <Link to="/signup" className="font-semibold text-blue-600">
-            Sign up here
-          </Link>
-        </p>
+        )}
+
+        <div className="mt-5 w-full flex-1 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm sm:p-8 md:mt-8 md:flex-none dark:border-slate-700 dark:bg-slate-900/90">
+          <div className="mb-6 flex justify-center">
+            <GoogleSignInButton />
+          </div>
+
+          <div className="mb-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-300 dark:bg-slate-600" />
+            <span className="text-xs text-gray-600 sm:text-sm dark:text-slate-400">
+              or continue with email / User ID
+            </span>
+            <div className="h-px flex-1 bg-gray-300 dark:bg-slate-600" />
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-3 text-left">
+            <input
+              type="text"
+              name="email"
+              placeholder="Email or User ID"
+              required
+              value={formData.email}
+              onChange={handleChange}
+              className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base font-semibold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            />
+            <PasswordField
+              name="password"
+              placeholder="Password"
+              required
+              autoComplete="current-password"
+              value={formData.password}
+              onChange={handleChange}
+              wrapperClassName="relative w-full text-left"
+              className="rounded-xl border border-slate-200 px-3 py-3 text-base font-semibold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            />
+            <div className="text-right">
+              <Link
+                to="/forgot-password"
+                className="text-sm font-semibold text-blue-600 dark:text-blue-400"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full rounded-xl bg-blue-600 px-3 py-3 text-base font-semibold text-white disabled:opacity-60"
+            >
+              {isLoading ? "Logging in..." : "Login"}
+            </button>
+          </form>
+
+          <p className="mt-4 text-sm text-slate-700 dark:text-slate-300">
+            Don&apos;t have an account?{" "}
+            <Link to="/signup" className="font-semibold text-blue-600 dark:text-blue-400">
+              Sign up here
+            </Link>
+          </p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+            By signing in you agree to our{" "}
+            <Link
+              to="/privacy"
+              className="font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+            >
+              Privacy &amp; Policy
+            </Link>
+            .
+          </p>
+        </div>
       </div>
     </div>
   );

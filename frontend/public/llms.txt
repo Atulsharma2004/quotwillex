@@ -7,10 +7,14 @@ Quotwellix helps people post original quotes, browse popular classics, follow cr
 
 ## Main pages
 
-- [Home](https://quotwellix.in/): Quote of the day and product overview
+- [Home](https://quotwellix.in/): Motivational quotes, popular quotes, and quote of the day
 - [Popular Quotes](https://quotwellix.in/popular-quotes): Famous quotes, हिंदी कोट्स, सुविचार, classics
+- [Motivational Quotes](https://quotwellix.in/motivational-quotes): Motivational quotes and motivational lines in English and Hindi
+- [Inspirational Quotes](https://quotwellix.in/inspirational-quotes): Inspirational quotes and daily inspiration
+- [Hindi Quotes](https://quotwellix.in/hindi-quotes): हिंदी कोट्स, सुविचार, शायरी, प्रेरक विचार
 - [Awards](https://quotwellix.in/awards): Leaderboard for likes, comments, and Quote of the Day stars
-- [Guidelines](https://quotwellix.in/guidelines): Community rules, privacy, and usage instructions
+- [Guidelines](https://quotwellix.in/guidelines): How to use Quotwellix
+- [Privacy & Policy](https://quotwellix.in/privacy): Data, public vs private fields, and content policy
 - [Contact](https://quotwellix.in/contact): Support and feedback / संपर्क
 - [Sign up](https://quotwellix.in/signup): Create a free account / मुफ्त जुड़ें
 

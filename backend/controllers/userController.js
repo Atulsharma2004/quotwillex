@@ -5,6 +5,7 @@ import User from "../models/User.js";
 import Quote from "../models/Quote.js";
 import PopularQuote from "../models/PopularQuote.js";
 import Follow from "../models/Follow.js";
+import FollowRequest from "../models/FollowRequest.js";
 import {
   validateUsernameFormat,
   normalizeUsername,
@@ -43,6 +44,7 @@ import {
   USER_CARD_SELECT,
 } from "../utils/quoteSerializer.js";
 import { createAccessToken } from "../utils/accessToken.js";
+import { getFollowRelation } from "./followController.js";
 
 const createToken = (user) => createAccessToken(user);
 
@@ -145,13 +147,24 @@ const loadProfileBundle = async (userId, viewerId, query = {}) => {
       : "all"
     : "all";
 
-  const [communityTotal, popularTotal, isFollowing] = await Promise.all([
-    Quote.countDocuments(postsFilter),
-    PopularQuote.countDocuments(postsFilter),
-    viewerId && !isOwnProfile
-      ? Follow.exists({ follower: viewerId, following: userId }).then(Boolean)
-      : Promise.resolve(false),
-  ]);
+  const [communityTotal, popularTotal, relation, liveFollowerCount, liveFollowingCount] =
+    await Promise.all([
+      Quote.countDocuments(postsFilter),
+      PopularQuote.countDocuments(postsFilter),
+      viewerId && !isOwnProfile
+        ? getFollowRelation(viewerId, userId)
+        : Promise.resolve({
+            isFollowing: false,
+            followsYou: false,
+            requested: false,
+            incomingRequest: false,
+            incomingRequestId: null,
+            canFollowBack: false,
+          }),
+      Follow.countDocuments({ following: userId }),
+      Follow.countDocuments({ follower: userId }),
+    ]);
+  const isFollowing = relation.isFollowing;
 
   let totalPosts = communityTotal + popularTotal;
   let mixed = [];
@@ -232,8 +245,8 @@ const loadProfileBundle = async (userId, viewerId, query = {}) => {
     // Follow graphs are loaded via paginated /followers and /following routes.
     followers: [],
     following: [],
-    followerCount: user.followerCount || 0,
-    followingCount: user.followingCount || 0,
+    followerCount: liveFollowerCount,
+    followingCount: liveFollowingCount,
     postCount: user.postCount || communityTotal + popularTotal,
     communityPostCount: communityTotal,
     popularPostCount: popularTotal,
@@ -249,6 +262,11 @@ const loadProfileBundle = async (userId, viewerId, query = {}) => {
     ),
     isOwnProfile,
     isFollowing,
+    followsYou: relation.followsYou,
+    followRequested: relation.requested,
+    incomingFollowRequest: relation.incomingRequest,
+    incomingFollowRequestId: relation.incomingRequestId,
+    canFollowBack: relation.canFollowBack,
     needsUsername: isOwnProfile && !user.username,
     needsProfileDetails: isOwnProfile && isPrivateProfileIncomplete(user),
     profileKey: publicProfileKey(user),
@@ -700,72 +718,6 @@ export const updateUser = async (req, res) => {
   }
 };
 
-export const followUser = async (req, res) => {
-  try {
-    if (req.params.id === req.user.id) {
-      return res.status(400).json({ message: "You cannot follow yourself" });
-    }
-
-    const target = await User.findById(req.params.id).select("_id");
-    if (!target) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const created = await Follow.updateOne(
-      { follower: req.user.id, following: req.params.id },
-      { $setOnInsert: { follower: req.user.id, following: req.params.id } },
-      { upsert: true }
-    );
-
-    if (created.upsertedCount > 0) {
-      await Promise.all([
-        User.updateOne({ _id: req.user.id }, { $inc: { followingCount: 1 } }),
-        User.updateOne({ _id: req.params.id }, { $inc: { followerCount: 1 } }),
-      ]);
-    }
-
-    res.json({
-      message: "Followed successfully",
-      following: true,
-      targetId: req.params.id,
-    });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ message: "Request failed" });
-  }
-};
-
-export const unfollowUser = async (req, res) => {
-  try {
-    const removed = await Follow.deleteOne({
-      follower: req.user.id,
-      following: req.params.id,
-    });
-
-    if (removed.deletedCount > 0) {
-      await Promise.all([
-        User.updateOne(
-          { _id: req.user.id, followingCount: { $gt: 0 } },
-          { $inc: { followingCount: -1 } }
-        ),
-        User.updateOne(
-          { _id: req.params.id, followerCount: { $gt: 0 } },
-          { $inc: { followerCount: -1 } }
-        ),
-      ]);
-    }
-
-    res.json({
-      message: "Unfollowed successfully",
-      following: false,
-      targetId: req.params.id,
-    });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ message: "Request failed" });
-  }
-};
-
 export const getProfile = async (req, res) => {
   try {
     // Fast path for auth sync / account page — no posts serialization.
@@ -830,7 +782,10 @@ export const listFollowers = async (req, res) => {
         .populate("follower", USER_CARD_SELECT)
         .lean(),
     ]);
-    const users = rows.map((row) => row.follower).filter(Boolean);
+    const users = await withViewerFollowFlags(
+      rows.map((row) => row.follower).filter(Boolean),
+      req.user.id
+    );
     res.json(paginatedResponse("users", users, total, page, limit));
   } catch (error) {
     console.error(error.message);
@@ -857,10 +812,100 @@ export const listFollowing = async (req, res) => {
         .populate("following", USER_CARD_SELECT)
         .lean(),
     ]);
-    const users = rows.map((row) => row.following).filter(Boolean);
+    const users = await withViewerFollowFlags(
+      rows.map((row) => row.following).filter(Boolean),
+      req.user.id
+    );
     res.json(paginatedResponse("users", users, total, page, limit));
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ message: "Request failed" });
   }
+};
+
+/**
+ * Attach live relation flags for the authenticated viewer (batched).
+ */
+const withViewerFollowFlags = async (users, viewerId) => {
+  const list = (users || []).filter(Boolean);
+  if (!list.length || !viewerId) {
+    return list.map((u) => ({
+      ...u,
+      followedByMe: false,
+      followRequested: false,
+      followsYou: false,
+      canFollowBack: false,
+      incomingFollowRequestId: null,
+    }));
+  }
+
+  const viewer = viewerId.toString();
+  const ids = list
+    .map((u) => (u._id || u)?.toString())
+    .filter((id) => id && id !== viewer);
+
+  if (!ids.length) {
+    return list.map((u) => ({
+      ...u,
+      followedByMe: false,
+      followRequested: false,
+      followsYou: false,
+      canFollowBack: false,
+      incomingFollowRequestId: null,
+    }));
+  }
+
+  const [iFollow, theyFollow, outgoing, incoming] = await Promise.all([
+    Follow.find({ follower: viewer, following: { $in: ids } })
+      .select("following")
+      .lean(),
+    Follow.find({ follower: { $in: ids }, following: viewer })
+      .select("follower")
+      .lean(),
+    FollowRequest.find({
+      from: viewer,
+      to: { $in: ids },
+      status: "pending",
+    })
+      .select("to")
+      .lean(),
+    FollowRequest.find({
+      from: { $in: ids },
+      to: viewer,
+      status: "pending",
+    })
+      .select("from _id")
+      .lean(),
+  ]);
+
+  const followedByMe = new Set(iFollow.map((r) => r.following.toString()));
+  const followsYou = new Set(theyFollow.map((r) => r.follower.toString()));
+  const requested = new Set(outgoing.map((r) => r.to.toString()));
+  const incomingByFrom = new Map(
+    incoming.map((r) => [r.from.toString(), r._id.toString()])
+  );
+
+  return list.map((u) => {
+    const id = (u._id || u)?.toString();
+    if (!id || id === viewer) {
+      return {
+        ...u,
+        followedByMe: false,
+        followRequested: false,
+        followsYou: false,
+        canFollowBack: false,
+        incomingFollowRequestId: null,
+      };
+    }
+    const iFollowThem = followedByMe.has(id);
+    const theyFollowMe = followsYou.has(id);
+    return {
+      ...u,
+      followedByMe: iFollowThem,
+      followRequested: !iFollowThem && requested.has(id),
+      followsYou: theyFollowMe,
+      canFollowBack: theyFollowMe && !iFollowThem,
+      incomingFollowRequestId: incomingByFrom.get(id) || null,
+    };
+  });
 };

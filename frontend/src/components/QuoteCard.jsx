@@ -97,12 +97,18 @@ const QuoteCard = ({
 
   // Prefer local following list (optimistic); fall back to page flag from API.
   const followingList = user?.following || [];
+  const pendingList = user?.pendingFollowRequests || [];
   const listedFollowing = followingList.some(
     (entry) => (entry?._id || entry)?.toString() === authorId
   );
   const isFollowingAuthor =
     listedFollowing ||
     (Boolean(quote.followedByMe) && followingList.length === 0);
+  const isRequestedAuthor =
+    !isFollowingAuthor &&
+    (pendingList.some((id) => id?.toString() === authorId) ||
+      Boolean(quote.followRequested));
+
 
   const isLiked =
     quote.likedByMe ??
@@ -201,24 +207,24 @@ const QuoteCard = ({
   };
 
   return (
-    <div className="border border-blue-100 px-4 py-2 my-2 w-3/4 mx-auto rounded-lg bg-white/80 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-      <div className="header-quote-post px-2 py-1 flex items-center justify-between gap-2">
-        <div className="owner-detail group flex items-center gap-2 rounded-md px-2 py-2 transition flex-1 min-w-0 text-left hover:bg-blue-50 dark:hover:bg-slate-800">
+    <div className="mx-auto my-1.5 w-[95%] max-w-3xl rounded-lg border border-blue-100 bg-white/80 px-3 py-1.5 shadow-sm sm:my-2 sm:w-3/4 sm:px-4 sm:py-2 dark:border-slate-700 dark:bg-slate-900/80">
+      <div className="header-quote-post flex items-center justify-between gap-2 px-1 py-0.5 sm:px-2 sm:py-1">
+        <div className="owner-detail group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-blue-50 sm:px-2 sm:py-2 dark:hover:bg-slate-800">
           <ProfileAvatar
             src={quote.author?.profilePicture}
             alt=""
-            className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-blue-100 dark:ring-slate-600"
+            className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-blue-100 sm:h-10 sm:w-10 dark:ring-slate-600"
           />
           <button
             type="button"
             onClick={goToAuthor}
             className="author-name min-w-0 flex-1 text-left"
           >
-            <p className="font-bold truncate text-gray-900 group-hover:text-blue-700 dark:text-slate-100 dark:group-hover:text-blue-300">
+            <p className="truncate text-sm font-bold text-gray-900 group-hover:text-blue-700 sm:text-base dark:text-slate-100 dark:group-hover:text-blue-300">
               {quote.author?.username || quote.author?.name}
             </p>
             {quote.author?.username && quote.author?.name && (
-              <p className="text-xs text-gray-500 truncate dark:text-slate-400">
+              <p className="truncate text-xs text-gray-500 dark:text-slate-400">
                 {quote.author.name}
               </p>
             )}
@@ -229,10 +235,17 @@ const QuoteCard = ({
           <button
             type="button"
             disabled={followBusyId === authorId}
-            onClick={() => onFollowToggle(authorId, isFollowingAuthor, quote.author)}
-            className={`shrink-0 text-sm font-semibold px-3 py-1.5 rounded-full transition disabled:opacity-60 ${
-              isFollowingAuthor
-                ? "bg-gray-100 text-gray-800 border border-gray-300 hover:bg-gray-200 dark:bg-slate-700 dark:text-white dark:border-slate-500 dark:hover:bg-slate-600"
+            onClick={() =>
+              onFollowToggle(
+                authorId,
+                isFollowingAuthor,
+                quote.author,
+                isRequestedAuthor
+              )
+            }
+            className={`min-h-9 shrink-0 rounded-full px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:px-3 sm:text-sm ${
+              isFollowingAuthor || isRequestedAuthor
+                ? "border border-gray-300 bg-gray-100 text-gray-800 hover:bg-gray-200 dark:border-slate-500 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600"
                 : "bg-blue-600 text-white hover:bg-blue-700"
             }`}
           >
@@ -240,12 +253,14 @@ const QuoteCard = ({
               ? "..."
               : isFollowingAuthor
                 ? "Unfollow"
-                : "Follow"}
+                : isRequestedAuthor
+                  ? "Requested"
+                  : "Follow"}
           </button>
         )}
       </div>
 
-      <div className="relative flex min-h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-indigo-800 to-blue-900 py-8">
+      <div className="relative flex min-h-[120px] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-indigo-800 to-blue-900 py-4 sm:min-h-[200px] sm:py-8">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           aria-hidden
@@ -254,8 +269,8 @@ const QuoteCard = ({
               "radial-gradient(circle at 18% 22%, rgba(255,255,255,0.35), transparent 42%), radial-gradient(circle at 82% 78%, rgba(147,197,253,0.35), transparent 45%)",
           }}
         />
-        <div className="relative z-[1] mx-auto w-3/4 rounded-md border-2 border-white bg-white px-4 py-4 shadow-xl dark:border-slate-600 dark:bg-slate-900">
-          <p className="text-xl mb-1 font-bold text-blue-600">
+        <div className="relative z-[1] mx-auto w-[90%] rounded-md border-2 border-white bg-white px-3 py-3 shadow-xl sm:w-3/4 sm:px-4 sm:py-4 dark:border-slate-600 dark:bg-slate-900">
+          <p className="mb-1 text-base font-bold text-blue-600 sm:text-xl">
             <FaQuoteLeft />
           </p>
           {editQuoteId === quote._id ? (
@@ -313,7 +328,7 @@ const QuoteCard = ({
             </div>
           ) : (
             <>
-              <p className="text-xl italic whitespace-pre-wrap text-gray-900 dark:text-slate-100">
+              <p className="whitespace-pre-wrap text-base italic text-gray-900 sm:text-xl dark:text-slate-100">
                 {quote.text}
               </p>
               {quote.attributedTo && (

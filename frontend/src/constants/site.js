@@ -13,10 +13,10 @@ export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 export const DEFAULT_AVATAR = "/default-avatar.svg";
 
 export const SITE_DESCRIPTION =
-  "Quotwellix — English और Hindi में quotes शेयर करें। Quote of the day, motivational quotes, प्रेरक विचार, शायरी और popular classics खोजें। भारत का social quotes community।";
+  "Motivational quotes, popular quotes, and daily inspiration in English and Hindi. Read famous quotes, motivational lines, हिंदी कोट्स, सुविचार और शायरी — free on Quotwellix.";
 
 export const SITE_DESCRIPTION_EN =
-  "Quotwellix is a social quotes platform to share quotes online in English and Hindi, discover quote of the day, browse popular classics, and connect with a thoughtful community in India.";
+  "Read motivational quotes, popular quotes, inspirational quotes, and Hindi suvichar. Quotwellix is a free quotes website for English and Hindi — quote of the day, famous classics, and community lines.";
 
 /** English + Hindi (Devanagari) + Hinglish / Roman Hindi search terms. */
 export const SITE_KEYWORDS = [
@@ -24,14 +24,11 @@ export const SITE_KEYWORDS = [
   "Quotwellix",
   "quotwellix.in",
   // Core English
-  "Hindi quotes",
-  "share quotes online",
-  "English Hindi quotes community",
-  "inspirational quotes",
+  "quotes",
   "motivational quotes",
-  "daily quotes",
-  "quote of the day",
-  "popular quotes classics",
+  "motivational lines",
+  "popular quotes",
+  "inspirational quotes",
   "famous quotes",
   "social quotes platform India",
   "post your own quotes online",
@@ -250,20 +247,20 @@ export const SITE_LOGO = "/quotwellix-logo.png";
 
 export const SEO_ROUTES = {
   home: {
-    title: `${SITE_NAME} — ${SITE_TAGLINE} | हिंदी कोट्स एवं सुविचार`,
+    title: `Motivational Quotes, Popular Quotes & Daily Inspiration | ${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     path: "/",
   },
   popular: {
-    title: `Popular Quotes, हिंदी कोट्स और क्लासिक्स | ${SITE_NAME}`,
+    title: `Popular Quotes, Famous Quotes & Classics | ${SITE_NAME}`,
     description:
-      "Browse popular quotes और प्रसिद्ध हिंदी कोट्स, सुविचार व classics on Quotwellix. Filter by category, language (English/Hindi), and date — timeless wisdom to share.",
+      "Read popular quotes, famous quotes, and timeless classics in English and Hindi. Browse motivational lines, love quotes, wisdom, and Hindi suvichar on Quotwellix.",
     path: "/popular-quotes",
   },
   awards: {
-    title: `Awards & Leaderboard | पुरस्कार | ${SITE_NAME}`,
+    title: `Best Quotes Leaderboard — Most Liked & Quote of the Day | ${SITE_NAME}`,
     description:
-      "Quotwellix awards: most liked quotes, most commented lines, और Quote of the Day stars — सबसे पसंद आए कोट्स और क्रिएटर्स देखें।",
+      "See the most liked quotes, most commented lines, and Quote of the Day stars. Popular motivational quotes and community favorites on Quotwellix.",
     path: "/awards",
   },
   quotes: {
@@ -305,9 +302,15 @@ export const SEO_ROUTES = {
     path: "/contact",
   },
   guidelines: {
-    title: `Guidelines & Policies | नियम | ${SITE_NAME}`,
+    title: `Guidelines | कैसे इस्तेमाल करें | ${SITE_NAME}`,
     description:
-      "Quotwellix community guidelines: site कैसे इस्तेमाल करें, content rules, abusive-word policy, privacy, और guest vs member access।",
+      "Quotwellix guidelines: site कैसे इस्तेमाल करें, what’s mandatory, guests vs members, और Get App — how to use Quotwellix.",
     path: "/guidelines",
+  },
+  privacy: {
+    title: `Privacy & Policy | गोपनीयता | ${SITE_NAME}`,
+    description:
+      "Quotwellix Privacy & Policy: what we collect, public vs private profile fields, content rules, abusive-word policy, और account agreement.",
+    path: "/privacy",
   },
 };

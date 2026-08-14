@@ -120,11 +120,55 @@ export const followUser = createAsyncThunk(
   }
 );
 
+export const cancelFollowRequest = createAsyncThunk(
+  "auth/cancelFollowRequest",
+  async (userId, thunkAPI) => {
+    try {
+      return await authService.cancelFollowRequest(userId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 export const unfollowUser = createAsyncThunk(
   "auth/unfollowUser",
   async (userId, thunkAPI) => {
     try {
       return await authService.unfollowUser(userId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const acceptFollowRequest = createAsyncThunk(
+  "auth/acceptFollowRequest",
+  async (requestId, thunkAPI) => {
+    try {
+      return await authService.acceptFollowRequest(requestId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const rejectFollowRequest = createAsyncThunk(
+  "auth/rejectFollowRequest",
+  async (requestId, thunkAPI) => {
+    try {
+      return await authService.rejectFollowRequest(requestId);
+    } catch (error) {
+      return thunkAPI.rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const followBack = createAsyncThunk(
+  "auth/followBack",
+  async (userId, thunkAPI) => {
+    try {
+      return await authService.followBack(userId);
     } catch (error) {
       return thunkAPI.rejectWithValue(getErrorMessage(error));
     }
@@ -177,6 +221,22 @@ const authSlice = createSlice({
       }
       localStorage.setItem("user", JSON.stringify(state.user));
     },
+    /** Track outgoing pending follow requests (Instagram-style). */
+    patchPendingFollowLocal: (state, action) => {
+      const { targetId, requested } = action.payload;
+      if (!state.user) return;
+      const idStr = targetId.toString();
+      const list = state.user.pendingFollowRequests || [];
+      const exists = list.some((id) => id?.toString() === idStr);
+      if (requested && !exists) {
+        state.user.pendingFollowRequests = [...list, idStr];
+      } else if (!requested && exists) {
+        state.user.pendingFollowRequests = list.filter(
+          (id) => id?.toString() !== idStr
+        );
+      }
+      localStorage.setItem("user", JSON.stringify(state.user));
+    },
     /** Merge auth user from an already-loaded profile (avoids a second API call). */
     syncAuthUser: (state, action) => {
       if (!action.payload || !state.user) {
@@ -195,6 +255,9 @@ const authSlice = createSlice({
       delete next.postsPagination;
       if (action.payload.following === undefined) {
         next.following = prev.following;
+      }
+      if (action.payload.pendingFollowRequests === undefined) {
+        next.pendingFollowRequests = prev.pendingFollowRequests;
       }
       state.user = next;
       localStorage.setItem("user", JSON.stringify(next));
@@ -230,6 +293,12 @@ const authSlice = createSlice({
         delete slim.postsPagination;
         if (slim.following === undefined && state.user?.following) {
           slim.following = state.user.following;
+        }
+        if (
+          slim.pendingFollowRequests === undefined &&
+          state.user?.pendingFollowRequests
+        ) {
+          slim.pendingFollowRequests = state.user.pendingFollowRequests;
         }
         state.user = { ...(state.user || {}), ...slim };
         state.token = getValidStoredToken();
@@ -327,27 +396,112 @@ const authSlice = createSlice({
         if (slim.following === undefined && state.user?.following) {
           slim.following = state.user.following;
         }
+        if (
+          slim.pendingFollowRequests === undefined &&
+          state.user?.pendingFollowRequests
+        ) {
+          slim.pendingFollowRequests = state.user.pendingFollowRequests;
+        }
         state.user = { ...state.user, ...slim };
         localStorage.setItem("user", JSON.stringify(state.user));
       })
       .addCase(followUser.fulfilled, (state, action) => {
-        // local patch already applied; keep payload sync optional
+        if (!state.user) return;
         if (action.payload?.user) {
           state.user = {
             ...state.user,
             ...action.payload.user,
           };
+        }
+        const targetId = action.payload?.targetId;
+        if (targetId && action.payload?.following) {
+          const idStr = targetId.toString();
+          const list = state.user.following || [];
+          const exists = list.some(
+            (e) => (e?._id || e)?.toString() === idStr
+          );
+          if (!exists) {
+            state.user.following = [...list, idStr];
+          }
+          state.user.pendingFollowRequests = (
+            state.user.pendingFollowRequests || []
+          ).filter((id) => id?.toString() !== idStr);
+        } else if (targetId && action.payload?.requested) {
+          const idStr = targetId.toString();
+          const pending = state.user.pendingFollowRequests || [];
+          if (!pending.some((id) => id?.toString() === idStr)) {
+            state.user.pendingFollowRequests = [...pending, idStr];
+          }
+        }
+        localStorage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(unfollowUser.fulfilled, (state, action) => {
+        if (!state.user) return;
+        if (action.payload?.user) {
+          state.user = {
+            ...state.user,
+            ...action.payload.user,
+          };
+        }
+        const targetId = action.payload?.targetId;
+        if (targetId) {
+          const idStr = targetId.toString();
+          state.user.following = (state.user.following || []).filter(
+            (e) => (e?._id || e)?.toString() !== idStr
+          );
+          state.user.pendingFollowRequests = (
+            state.user.pendingFollowRequests || []
+          ).filter((id) => id?.toString() !== idStr);
+        }
+        localStorage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(cancelFollowRequest.fulfilled, (state, action) => {
+        if (!state.user) return;
+        const targetId = action.payload?.targetId;
+        if (targetId) {
+          const idStr = targetId.toString();
+          state.user.pendingFollowRequests = (
+            state.user.pendingFollowRequests || []
+          ).filter((id) => id?.toString() !== idStr);
           localStorage.setItem("user", JSON.stringify(state.user));
         }
       })
-      .addCase(unfollowUser.fulfilled, (state, action) => {
-        if (action.payload?.user) {
-          state.user = {
-            ...state.user,
-            ...action.payload.user,
-          };
-          localStorage.setItem("user", JSON.stringify(state.user));
+      .addCase(acceptFollowRequest.fulfilled, (state, action) => {
+        if (!state.user) return;
+        // Accepting means THEY follow YOU → only your followerCount increases
+        const accepter = action.payload?.accepter;
+        if (accepter && accepter._id?.toString() === state.user._id?.toString()) {
+          state.user.followerCount = accepter.followerCount;
+          state.user.followingCount = accepter.followingCount;
+        } else {
+          state.user.followerCount = (state.user.followerCount || 0) + 1;
         }
+        localStorage.setItem("user", JSON.stringify(state.user));
+      })
+      .addCase(followBack.fulfilled, (state, action) => {
+        if (!state.user) return;
+        const me = action.payload?.me;
+        if (me) {
+          state.user.followerCount = me.followerCount;
+          state.user.followingCount = me.followingCount;
+        } else {
+          state.user.followingCount = (state.user.followingCount || 0) + 1;
+        }
+        const targetId = action.payload?.targetId;
+        if (targetId) {
+          const idStr = targetId.toString();
+          const list = state.user.following || [];
+          const exists = list.some(
+            (e) => (e?._id || e)?.toString() === idStr
+          );
+          if (!exists) {
+            state.user.following = [...list, idStr];
+          }
+          state.user.pendingFollowRequests = (
+            state.user.pendingFollowRequests || []
+          ).filter((id) => id?.toString() !== idStr);
+        }
+        localStorage.setItem("user", JSON.stringify(state.user));
       })
       .addCase(updateProfile.fulfilled, (state, action) => {
         const prevFollowing = state.user?.following;
@@ -367,6 +521,7 @@ const authSlice = createSlice({
 export const {
   reset,
   patchFollowingLocal,
+  patchPendingFollowLocal,
   syncAuthUser,
   setAccessToken,
   clearSession,

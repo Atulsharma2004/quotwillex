@@ -18,8 +18,10 @@ import {
 } from "../redux/quotes/quoteSlice";
 import {
   followUser,
+  cancelFollowRequest,
   unfollowUser,
   patchFollowingLocal,
+  patchPendingFollowLocal,
 } from "../redux/auth/authSlice";
 import QuoteCard from "../components/QuoteCard";
 import Pagination from "../components/Pagination";
@@ -348,9 +350,13 @@ const Quotes = () => {
     dispatch(deleteComment({ quoteId, commentId }));
   };
 
-  const handleFollowToggle = (authorId, currentlyFollowing, author) => {
+  const handleFollowToggle = (
+    authorId,
+    currentlyFollowing,
+    author,
+    currentlyRequested
+  ) => {
     if (!user || !authorId) return;
-    const willFollow = !currentlyFollowing;
     const snapshot = {
       _id: authorId,
       name: author?.name,
@@ -359,28 +365,60 @@ const Quotes = () => {
     };
 
     setFollowBusyId(authorId);
-    dispatch(
-      patchFollowingLocal({
-        targetId: authorId,
-        following: willFollow,
-        targetSnapshot: snapshot,
-      })
-    );
 
-    const action = currentlyFollowing
-      ? unfollowUser(authorId)
-      : followUser(authorId);
+    if (currentlyFollowing) {
+      dispatch(
+        patchFollowingLocal({
+          targetId: authorId,
+          following: false,
+          targetSnapshot: snapshot,
+        })
+      );
+      dispatch(unfollowUser(authorId)).then((result) => {
+        setFollowBusyId(null);
+        if (unfollowUser.rejected.match(result)) {
+          dispatch(
+            patchFollowingLocal({
+              targetId: authorId,
+              following: true,
+              targetSnapshot: snapshot,
+            })
+          );
+        }
+      });
+      return;
+    }
 
-    dispatch(action).then((result) => {
+    if (currentlyRequested) {
+      dispatch(patchPendingFollowLocal({ targetId: authorId, requested: false }));
+      dispatch(cancelFollowRequest(authorId)).then((result) => {
+        setFollowBusyId(null);
+        if (cancelFollowRequest.rejected.match(result)) {
+          dispatch(
+            patchPendingFollowLocal({ targetId: authorId, requested: true })
+          );
+        }
+      });
+      return;
+    }
+
+    dispatch(patchPendingFollowLocal({ targetId: authorId, requested: true }));
+    dispatch(followUser(authorId)).then((result) => {
       setFollowBusyId(null);
-      if (
-        followUser.rejected.match(result) ||
-        unfollowUser.rejected.match(result)
-      ) {
+      if (followUser.rejected.match(result)) {
+        dispatch(
+          patchPendingFollowLocal({ targetId: authorId, requested: false })
+        );
+        return;
+      }
+      if (result.payload?.following) {
+        dispatch(
+          patchPendingFollowLocal({ targetId: authorId, requested: false })
+        );
         dispatch(
           patchFollowingLocal({
             targetId: authorId,
-            following: currentlyFollowing,
+            following: true,
             targetSnapshot: snapshot,
           })
         );

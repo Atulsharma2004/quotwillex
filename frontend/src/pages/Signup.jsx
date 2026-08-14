@@ -147,186 +147,215 @@ const Signup = () => {
   };
 
   const fieldClass =
-    "w-3/4 px-2 py-1 font-bold text-md mb-3 rounded-md";
+    "w-full rounded-xl border border-slate-200 px-3 py-3 text-base font-semibold outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 mb-3";
 
   return (
-    <div className="text-center p-5">
+    <div className="flex min-h-[100dvh] flex-col bg-gradient-to-br from-blue-50 to-indigo-100 md:min-h-0 dark:from-slate-950 dark:to-slate-900">
       <Seo {...SEO_ROUTES.signup} />
-      <h1 className="text-2xl font-bold">Sign Up</h1>
-      {isError && <p className="text-red-600 mt-2">{message}</p>}
-      <div className="bg-gray-200 w-3/4 m-auto p-8 rounded-md mt-4 dark:bg-slate-800">
-        <div className="mb-6">
-          <GoogleSignInButton />
-        </div>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="flex-1 h-px bg-gray-400/60" />
-          <span className="text-sm text-gray-600 dark:text-slate-300">
-            or create with email
+
+      <div className="flex items-center justify-between border-b border-indigo-100/80 bg-white/90 px-4 py-3 backdrop-blur md:hidden dark:border-slate-700 dark:bg-slate-900/90">
+        <Link to="/" className="flex items-center gap-2 font-bold text-slate-900 dark:text-white">
+          <picture>
+            <source srcSet="/quotwellix-mark.webp" type="image/webp" />
+            <img
+              src="/quotwellix-mark.png"
+              alt=""
+              className="h-8 w-8 rounded-lg object-cover"
+              width={32}
+              height={32}
+            />
+          </picture>
+          <span>
+            Quot<span className="text-[#C45C3A] dark:text-orange-300">wellix</span>
           </span>
-          <div className="flex-1 h-px bg-gray-400/60" />
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="mx-auto mb-4 flex flex-col items-center">
-            <p className="mb-2 max-w-xs text-center text-xs text-gray-600 dark:text-slate-400">
-              {PROFILE_IMAGE_HINT}
-            </p>
-            <div
-              className={`relative w-[100px] h-[100px] rounded-full overflow-hidden cursor-pointer border-2 border-indigo-200 bg-indigo-50 shadow-sm transition hover:border-indigo-400 dark:border-slate-600 dark:bg-slate-900 ${
-                imageBusy ? "opacity-70 pointer-events-none" : ""
-              }`}
-              onClick={handleIconClick}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === "Enter" && handleIconClick()}
-              aria-label="Upload profile photo"
-              title="Upload profile photo"
-            >
-              <img
-                src={imagePreview || DEFAULT_AVATAR}
-                alt="Default user icon"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = DEFAULT_AVATAR;
-                }}
+        </Link>
+        <Link
+          to="/login"
+          className="text-sm font-semibold text-indigo-600 dark:text-indigo-300"
+        >
+          Sign In
+        </Link>
+      </div>
+
+      <div className="mx-auto w-full max-w-xl flex-1 px-4 py-6 text-center sm:px-6 md:p-5">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100 md:text-3xl">
+          Sign Up
+        </h1>
+        {isError && <p className="mt-2 text-red-600">{message}</p>}
+        <div className="mt-4 w-full rounded-2xl border border-blue-100 bg-white p-5 shadow-sm sm:p-8 dark:border-slate-700 dark:bg-slate-900/90 md:bg-gray-200 md:dark:bg-slate-800">
+          <div className="mb-6">
+            <GoogleSignInButton />
+          </div>
+          <div className="mb-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-400/60" />
+            <span className="text-xs text-gray-600 sm:text-sm dark:text-slate-300">
+              or create with email
+            </span>
+            <div className="h-px flex-1 bg-gray-400/60" />
+          </div>
+          <form onSubmit={handleSubmit} className="text-left">
+            <div className="mx-auto mb-4 flex flex-col items-center">
+              <p className="mb-2 max-w-xs text-center text-xs text-gray-600 dark:text-slate-400">
+                {PROFILE_IMAGE_HINT}
+              </p>
+              <div
+                className={`relative h-[100px] w-[100px] cursor-pointer overflow-hidden rounded-full border-2 border-indigo-200 bg-indigo-50 shadow-sm transition hover:border-indigo-400 dark:border-slate-600 dark:bg-slate-900 ${
+                  imageBusy ? "pointer-events-none opacity-70" : ""
+                }`}
+                onClick={handleIconClick}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && handleIconClick()}
+                aria-label="Upload profile photo"
+                title="Upload profile photo"
+              >
+                <img
+                  src={imagePreview || DEFAULT_AVATAR}
+                  alt="Default user icon"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = DEFAULT_AVATAR;
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-600 dark:text-slate-400">
+                {imageBusy
+                  ? "Resizing image for upload…"
+                  : hasCustomImage
+                    ? "Custom photo selected"
+                    : "Default user icon — click to upload"}
+              </p>
+              {imageError && (
+                <p className="mt-2 max-w-xs text-center text-sm text-red-600">
+                  {imageError}
+                </p>
+              )}
+              {hasCustomImage && (
+                <button
+                  type="button"
+                  onClick={clearCustomImage}
+                  className="mt-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
+                >
+                  Use default icon
+                </button>
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                ref={fileInputRef}
+                onChange={handleImageChange}
+                className="hidden"
               />
             </div>
-            <p className="mt-2 text-xs text-gray-600 dark:text-slate-400">
-              {imageBusy
-                ? "Resizing image for upload…"
-                : hasCustomImage
-                  ? "Custom photo selected"
-                  : "Default user icon — click to upload"}
-            </p>
-            {imageError && (
-              <p className="mt-2 max-w-xs text-center text-sm text-red-600">
-                {imageError}
-              </p>
-            )}
-            {hasCustomImage && (
-              <button
-                type="button"
-                onClick={clearCustomImage}
-                className="mt-1 text-xs font-semibold text-indigo-600 hover:underline dark:text-indigo-300"
-              >
-                Use default icon
-              </button>
-            )}
             <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              ref={fileInputRef}
-              onChange={handleImageChange}
-              className="hidden"
+              type="text"
+              name="name"
+              placeholder="Name"
+              required
+              value={formData.name}
+              onChange={handleChange}
+              className={fieldClass}
             />
-          </div>
-          <input
-            type="text"
-            name="name"
-            placeholder="Name"
-            required
-            value={formData.name}
-            onChange={handleChange}
-            className={fieldClass}
-          />
-          <br />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            required
-            value={formData.email}
-            onChange={handleChange}
-            className={fieldClass}
-          />
-          <br />
-          <PasswordField
-            name="password"
-            placeholder="Password (min 8 characters)"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            value={formData.password}
-            onChange={handleChange}
-            wrapperClassName="relative mx-auto mb-3 w-3/4"
-            className="px-2 py-1 font-bold text-md rounded-md"
-          />
-          <br />
-          <input
-            type="text"
-            name="bio"
-            placeholder="Bio (optional)"
-            value={formData.bio}
-            onChange={handleChange}
-            className={fieldClass}
-          />
+            <input
+              type="email"
+              name="email"
+              placeholder="Email"
+              required
+              value={formData.email}
+              onChange={handleChange}
+              className={fieldClass}
+            />
+            <PasswordField
+              name="password"
+              placeholder="Password (min 8 characters)"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={formData.password}
+              onChange={handleChange}
+              wrapperClassName="relative mb-3 w-full"
+              className="rounded-xl border border-slate-200 px-3 py-3 text-base font-semibold dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            />
+            <input
+              type="text"
+              name="bio"
+              placeholder="Bio (optional)"
+              value={formData.bio}
+              onChange={handleChange}
+              className={fieldClass}
+            />
 
-          <div
-            ref={extrasRef}
-            className="mx-auto mb-3 w-3/4 rounded-xl border border-dashed border-indigo-300 bg-white/50 px-3 py-3 text-left dark:border-slate-600 dark:bg-slate-900/40"
-          >
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
-              Optional details (private)
+            <div
+              ref={extrasRef}
+              className="mb-3 w-full rounded-xl border border-dashed border-indigo-300 bg-white/50 px-3 py-3 text-left dark:border-slate-600 dark:bg-slate-900/40"
+            >
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
+                Optional details (private)
+              </p>
+              <input
+                type="tel"
+                name="mobileNumber"
+                placeholder="Mobile number (optional)"
+                value={formData.mobileNumber}
+                onChange={handleChange}
+                className="mb-2 w-full rounded-md px-2 py-2 font-bold"
+              />
+              <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-slate-300">
+                Date of birth (optional)
+              </label>
+              <input
+                type="date"
+                name="dateOfBirth"
+                value={formData.dateOfBirth}
+                onChange={handleChange}
+                max={new Date().toISOString().slice(0, 10)}
+                className="mb-2 w-full rounded-md px-2 py-2 font-bold"
+              />
+              <LocationFields
+                idPrefix="signup"
+                country={formData.country}
+                state={formData.state}
+                city={formData.city}
+                onChange={({ country, state, city }) =>
+                  setFormData((prev) => ({ ...prev, country, state, city }))
+                }
+                layout="stack"
+                showLabels
+                labelClassName="mb-1 block text-xs font-semibold text-gray-600 dark:text-slate-300"
+                selectClassName="mb-2 w-full rounded-md px-2 py-2 font-bold bg-white dark:bg-slate-800 dark:text-slate-100"
+                inputClassName="mb-2 w-full rounded-md px-2 py-2 font-bold"
+              />
+            </div>
+            <p className="mb-3 w-full text-left text-[11px] text-gray-600 dark:text-slate-400">
+              These details stay private. You can skip and finish them later in
+              Account settings.
             </p>
-            <input
-              type="tel"
-              name="mobileNumber"
-              placeholder="Mobile number (optional)"
-              value={formData.mobileNumber}
-              onChange={handleChange}
-              className="mb-2 w-full rounded-md px-2 py-1 font-bold"
-            />
-            <label className="mb-1 block text-xs font-semibold text-gray-600 dark:text-slate-300">
-              Date of birth (optional)
-            </label>
-            <input
-              type="date"
-              name="dateOfBirth"
-              value={formData.dateOfBirth}
-              onChange={handleChange}
-              max={new Date().toISOString().slice(0, 10)}
-              className="mb-2 w-full rounded-md px-2 py-1 font-bold"
-            />
-            <LocationFields
-              idPrefix="signup"
-              country={formData.country}
-              state={formData.state}
-              city={formData.city}
-              onChange={({ country, state, city }) =>
-                setFormData((prev) => ({ ...prev, country, state, city }))
-              }
-              layout="stack"
-              showLabels
-              labelClassName="mb-1 block text-xs font-semibold text-gray-600 dark:text-slate-300"
-              selectClassName="mb-2 w-full rounded-md px-2 py-1 font-bold bg-white dark:bg-slate-800 dark:text-slate-100"
-              inputClassName="mb-2 w-full rounded-md px-2 py-1 font-bold"
-            />
-          </div>
-          <p className="mx-auto mb-3 w-3/4 text-left text-[11px] text-gray-600 dark:text-slate-400">
-            These details stay private. You can skip and finish them later in
-            Account settings.
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="mb-1 mt-2 w-full rounded-xl bg-blue-600 px-3 py-3 text-base font-semibold text-white disabled:opacity-60"
+            >
+              {isLoading ? "Registering..." : "Register"}
+            </button>
+          </form>
+          <p className="mt-3 text-sm">
+            Already have an account?{" "}
+            <Link to="/login" className="font-semibold text-blue-500">
+              Login here
+            </Link>
           </p>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="bg-blue-600 text-white px-2 py-1 w-3/4 rounded-md mb-1 mt-2 disabled:opacity-60"
-          >
-            {isLoading ? "Registering..." : "Register"}
-          </button>
-        </form>
-        <p className="mt-2">
-          Already have an account?{" "}
-          <Link to="/login" className="font-semibold text-blue-500">
-            Login here
-          </Link>
-        </p>
-        <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
-          By signing up you agree to our{" "}
-          <Link to="/guidelines" className="font-semibold text-indigo-600 hover:underline">
-            Guidelines
-          </Link>
-          .
-        </p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-slate-400">
+            By signing up you agree to our{" "}
+            <Link
+              to="/privacy"
+              className="font-semibold text-indigo-600 hover:underline"
+            >
+              Privacy &amp; Policy
+            </Link>
+            .
+          </p>
+        </div>
       </div>
 
       {showExtrasPrompt && (

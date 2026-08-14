@@ -192,12 +192,12 @@ const Awards = () => {
             Hall of fame
           </p>
           <h1 className="awards-title">
-            Awards
+            Best quotes
             <span className="awards-title-glow"> Top 3</span>
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm text-slate-600 dark:text-slate-400 sm:text-base">
-            Funky little podiums for Quotwellix’s brightest community voices.
-            Ties go to whoever earned it first.
+            Most liked quotes, most commented lines, and Quote of the Day stars
+            from the Quotwellix community.
           </p>
 
           <div

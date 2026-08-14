@@ -1,23 +1,26 @@
 {
+  "id": "/",
   "name": "Quotwellix",
   "short_name": "Quotwellix",
   "description": "English और Hindi में quotes, सुविचार और शायरी शेयर करें। Quote of the day और popular classics on Quotwellix.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#F6F0E6",
   "theme_color": "#1A2E44",
   "lang": "en",
   "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/quotwellix-logo.webp",
-      "sizes": "512x512",
+      "sizes": "192x192 512x512",
       "type": "image/webp",
       "purpose": "any"
     },
     {
       "src": "/quotwellix-logo.png",
-      "sizes": "512x512",
+      "sizes": "192x192 512x512",
       "type": "image/png",
       "purpose": "any"
     },

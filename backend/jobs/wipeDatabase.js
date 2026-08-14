@@ -14,6 +14,8 @@ const KNOWN_COLLECTIONS = [
   "quotes",
   "popularquotes",
   "follows",
+  "followrequests",
+  "notifications",
   "comments",
   "quotelikes",
   "quotedislikes",

@@ -3,15 +3,25 @@ import { FaQuoteLeft, FaCog, FaStar, FaIdCard, FaEdit } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import ProfileAvatar from "./ProfileAvatar";
 
+const followBtnClass =
+  "inline-flex min-h-8 items-center rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-sm";
+
 const ProfileHero = ({
   profile,
   postCount,
   isOwnProfile,
   isFollowing,
+  followRequested,
+  incomingFollowRequest,
+  canFollowBack,
   followBusy,
   onOpenFollowers,
   onOpenFollowing,
   onFollowToggle,
+  onCancelRequest,
+  onAcceptRequest,
+  onRejectRequest,
+  onFollowBack,
   onOpenSettings,
 }) => {
   const navigate = useNavigate();
@@ -34,23 +44,103 @@ const ProfileHero = ({
   const followersCount = profile.followerCount ?? (profile.followers || []).length;
   const followingCount = profile.followingCount ?? (profile.following || []).length;
 
+  const renderFollowActions = () => {
+    if (isOwnProfile) return null;
+
+    if (isFollowing) {
+      return (
+        <button
+          type="button"
+          disabled={followBusy}
+          onClick={onFollowToggle}
+          className={`mt-2 sm:mt-3 ${followBtnClass} border border-white/50 bg-white/20 text-white hover:bg-white/30`}
+        >
+          {followBusy ? "Please wait..." : "Unfollow"}
+        </button>
+      );
+    }
+
+    if (incomingFollowRequest) {
+      return (
+        <div className="mt-2 flex flex-wrap items-center justify-start gap-1.5 sm:mt-3 sm:gap-2">
+          <button
+            type="button"
+            disabled={followBusy}
+            onClick={onAcceptRequest}
+            className={`${followBtnClass} bg-white text-blue-700 hover:bg-blue-50`}
+          >
+            {followBusy ? "Please wait..." : "Accept"}
+          </button>
+          <button
+            type="button"
+            disabled={followBusy}
+            onClick={onRejectRequest}
+            className={`${followBtnClass} border border-white/50 bg-white/20 text-white hover:bg-white/30`}
+          >
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
+    if (canFollowBack) {
+      return (
+        <button
+          type="button"
+          disabled={followBusy}
+          onClick={onFollowBack}
+          className={`mt-2 sm:mt-3 ${followBtnClass} bg-white text-blue-700 hover:bg-blue-50`}
+        >
+          {followBusy ? "Please wait..." : "Follow back"}
+        </button>
+      );
+    }
+
+    if (followRequested) {
+      return (
+        <button
+          type="button"
+          disabled={followBusy}
+          onClick={onCancelRequest}
+          className={`mt-2 sm:mt-3 ${followBtnClass} border border-white/50 bg-white/20 text-white hover:bg-white/30`}
+        >
+          {followBusy ? "Please wait..." : "Requested"}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        disabled={followBusy}
+        onClick={onFollowToggle}
+        className={`mt-2 sm:mt-3 ${followBtnClass} bg-white text-blue-700 hover:bg-blue-50`}
+      >
+        {followBusy ? "Please wait..." : "Follow"}
+      </button>
+    );
+  };
+
+  const statClass =
+    "rounded-lg bg-white/15 backdrop-blur-sm border border-white/20 px-1.5 py-2 text-center transition sm:rounded-xl sm:px-3 sm:py-4";
+
   return (
-    <section className="relative overflow-hidden mx-auto w-[92%] max-w-4xl mt-6 rounded-2xl shadow-lg border border-blue-100">
+    <section className="relative mx-auto mt-3 w-[95%] max-w-4xl overflow-hidden rounded-xl border border-blue-100 shadow-lg sm:mt-6 sm:w-[92%] sm:rounded-2xl">
       <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-500 to-purple-600" />
-      <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
-      <div className="absolute -bottom-20 -left-10 w-64 h-64 rounded-full bg-indigo-300/20 blur-2xl" />
+      <div className="absolute -right-10 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+      <div className="absolute -bottom-20 -left-10 h-64 w-64 rounded-full bg-indigo-300/20 blur-2xl" />
 
       {isOwnProfile && (
-        <div ref={menuRef} className="absolute top-4 right-4 z-10">
+        <div ref={menuRef} className="absolute right-2 top-2 z-10 sm:right-4 sm:top-4">
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="p-2.5 rounded-full bg-white/20 hover:bg-white/30 border border-white/30 text-white backdrop-blur-sm transition"
+            className="rounded-full border border-white/30 bg-white/20 p-2 text-white backdrop-blur-sm transition hover:bg-white/30 sm:p-2.5"
             title="Settings"
             aria-label="Open settings menu"
             aria-expanded={menuOpen}
           >
-            <FaCog className="text-lg" />
+            <FaCog className="text-sm sm:text-lg" />
           </button>
 
           {menuOpen && (
@@ -82,88 +172,72 @@ const ProfileHero = ({
         </div>
       )}
 
-      <div className="relative px-6 sm:px-10 pt-10 pb-6 text-white">
-        <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
-          <div className="relative group">
-            <div className="absolute inset-0 rounded-full bg-white/30 blur-md scale-110 opacity-70 group-hover:opacity-100 transition" />
+      <div className="relative px-3 pb-3 pt-4 text-white sm:px-10 sm:pb-6 sm:pt-10">
+        {/* Compact row on mobile so hero + a quote fit above the fold */}
+        <div className="flex flex-row items-start gap-3 sm:items-end sm:gap-6">
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 scale-110 rounded-full bg-white/30 opacity-70 blur-md" />
             <ProfileAvatar
               src={profile.profilePicture}
               alt={profile.name}
-              className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full object-cover border-4 border-white/90 shadow-xl"
+              className="relative h-16 w-16 rounded-full border-[3px] border-white/90 object-cover shadow-lg sm:h-32 sm:w-32 sm:border-4 sm:shadow-xl"
             />
-            <div className="absolute -bottom-1 -right-1 bg-white text-blue-600 rounded-full p-2 shadow pointer-events-none">
-              <FaQuoteLeft className="text-sm" />
+            <div className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded-full bg-white p-1 text-blue-600 shadow sm:p-2">
+              <FaQuoteLeft className="text-[10px] sm:text-sm" />
             </div>
           </div>
 
-          <div className="flex-1 text-center sm:text-left">
-            <p className="text-blue-100 text-xs font-semibold tracking-[0.2em] uppercase mb-1">
+          <div className="min-w-0 flex-1 text-left">
+            <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-100 sm:mb-1 sm:text-xs sm:tracking-[0.2em]">
               {isOwnProfile ? "Your profile" : "Member profile"}
             </p>
-            <h1 className="text-3xl font-bold leading-tight">
+            <h1 className="truncate text-lg font-bold leading-tight sm:text-3xl">
               {profile.name}
               {profile.role === "admin" && (
-                <span className="ml-2 text-sm font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold sm:ml-2 sm:px-2 sm:text-sm">
                   admin
                 </span>
               )}
             </h1>
-            <p className="text-blue-100 mt-1 text-sm font-medium">
-              {profile.username ? profile.username : "User ID not set"}
+            <p className="mt-0.5 truncate text-xs font-medium text-blue-100 sm:mt-1 sm:text-sm">
+              {profile.username ? `@${profile.username}` : "User ID not set"}
             </p>
-            <p className="mt-3 text-blue-50/95 max-w-xl">
+            <p className="mt-1 line-clamp-2 text-xs leading-snug text-blue-50/95 sm:mt-3 sm:line-clamp-none sm:text-base sm:leading-normal">
               {profile.bio || "No bio available yet."}
             </p>
 
-            {!isOwnProfile && (
-              <button
-                type="button"
-                disabled={followBusy}
-                onClick={onFollowToggle}
-                className={`mt-4 inline-flex items-center px-5 py-2 rounded-full font-semibold transition disabled:opacity-60 ${
-                  isFollowing
-                    ? "bg-white/20 text-white border border-white/50 hover:bg-white/30"
-                    : "bg-white text-blue-700 hover:bg-blue-50"
-                }`}
-              >
-                {followBusy
-                  ? "Please wait..."
-                  : isFollowing
-                    ? "Unfollow"
-                    : "Follow"}
-              </button>
-            )}
+            {renderFollowActions()}
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-4 text-center hover:bg-white/20 transition">
-            <p className="text-2xl font-bold">{postCount || 0}</p>
-            <p className="text-xs uppercase tracking-wide text-blue-100 mt-1">
+        <div className="mt-3 grid grid-cols-4 gap-1.5 sm:mt-8 sm:gap-3">
+          <div className={`${statClass} hover:bg-white/20`}>
+            <p className="text-base font-bold sm:text-2xl">{postCount || 0}</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wide text-blue-100 sm:mt-1 sm:text-xs">
               Posts
             </p>
           </div>
 
           <div
-            className="rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-4 text-center hover:bg-white/20 transition"
+            className={`${statClass} hover:bg-white/20`}
             title="Stars earned when a quote becomes Quote of the Day"
           >
-            <p className="inline-flex items-center justify-center gap-1 text-2xl font-bold">
-              <FaStar className="text-amber-300 text-lg" />
+            <p className="inline-flex items-center justify-center gap-0.5 text-base font-bold sm:gap-1 sm:text-2xl">
+              <FaStar className="text-xs text-amber-300 sm:text-lg" />
               {profile.qotdStars || 0}
             </p>
-            <p className="text-xs uppercase tracking-wide text-blue-100 mt-1">
-              QOTD Stars
+            <p className="mt-0.5 text-[9px] uppercase tracking-wide text-blue-100 sm:mt-1 sm:text-xs">
+              Stars
             </p>
           </div>
 
           <button
             type="button"
             onClick={onOpenFollowers}
-            className="rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-4 text-center hover:bg-white/25 hover:scale-[1.02] transition cursor-pointer"
+            className={`${statClass} cursor-pointer hover:scale-[1.02] hover:bg-white/25`}
           >
-            <p className="text-2xl font-bold">{followersCount}</p>
-            <p className="text-xs uppercase tracking-wide text-blue-100 mt-1">
+            <p className="text-base font-bold sm:text-2xl">{followersCount}</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wide text-blue-100 sm:mt-1 sm:text-xs">
               Followers
             </p>
           </button>
@@ -171,10 +245,10 @@ const ProfileHero = ({
           <button
             type="button"
             onClick={onOpenFollowing}
-            className="rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 px-3 py-4 text-center hover:bg-white/25 hover:scale-[1.02] transition cursor-pointer"
+            className={`${statClass} cursor-pointer hover:scale-[1.02] hover:bg-white/25`}
           >
-            <p className="text-2xl font-bold">{followingCount}</p>
-            <p className="text-xs uppercase tracking-wide text-blue-100 mt-1">
+            <p className="text-base font-bold sm:text-2xl">{followingCount}</p>
+            <p className="mt-0.5 text-[9px] uppercase tracking-wide text-blue-100 sm:mt-1 sm:text-xs">
               Following
             </p>
           </button>
