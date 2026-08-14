@@ -279,6 +279,11 @@ const Profile = () => {
   };
 
   const handleDelete = (id) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this post? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
     dispatch(deleteQuote(id)).then((action) => {
       if (deleteQuote.fulfilled.match(action)) {
         setProfilePosts((prev) => prev.filter((q) => q._id !== id));

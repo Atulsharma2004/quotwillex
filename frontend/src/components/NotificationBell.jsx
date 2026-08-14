@@ -11,19 +11,16 @@ import {
 } from "../redux/auth/authSlice";
 import ProfileAvatar from "./ProfileAvatar";
 import { profilePath } from "../utils/profileKey";
+import { formatRelativeTime, formatDate, formatDateTime } from "../utils/datetime";
 
 const formatWhen = (iso) => {
   if (!iso) return "";
-  const then = new Date(iso).getTime();
-  const diff = Math.max(0, Date.now() - then);
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `${days}d`;
-  return new Date(iso).toLocaleDateString();
+  const relative = formatRelativeTime(iso);
+  if (!relative) return "";
+  if (relative === "just now") return "Just now";
+  // Compact relative for the bell (drop " ago")
+  if (relative.endsWith(" ago")) return relative.slice(0, -4);
+  return formatDate(iso);
 };
 
 /**
@@ -277,7 +274,10 @@ const NotificationBell = ({ currentUser }) => {
                               {body}
                             </span>
                           </p>
-                          <p className="mt-0.5 text-[11px] text-slate-400">
+                          <p
+                            className="mt-0.5 text-[11px] text-slate-400"
+                            title={formatDateTime(n.createdAt)}
+                          >
                             {formatWhen(n.createdAt)}
                           </p>
 

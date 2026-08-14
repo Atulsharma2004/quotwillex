@@ -12,6 +12,7 @@ import {
 import { DEFAULT_AVATAR } from "../constants/site";
 import ProfileAvatar from "./ProfileAvatar";
 import LocationFields from "./LocationFields";
+import PasswordField from "./PasswordField";
 
 const toDateInput = (value) => {
   if (!value) return "";
@@ -466,8 +467,8 @@ const EditProfileModal = ({
                       {passwordMsg}
                     </p>
                   )}
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="currentPassword"
                     value={passwordForm.currentPassword}
                     onChange={(e) =>
                       setPasswordForm((p) => ({
@@ -476,11 +477,12 @@ const EditProfileModal = ({
                       }))
                     }
                     className={inputClass}
+                    wrapperClassName="relative"
                     placeholder="Current password"
                     autoComplete="current-password"
                   />
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="newPassword"
                     value={passwordForm.newPassword}
                     onChange={(e) =>
                       setPasswordForm((p) => ({
@@ -489,11 +491,13 @@ const EditProfileModal = ({
                       }))
                     }
                     className={inputClass}
+                    wrapperClassName="relative"
                     placeholder="New password (min 8)"
                     autoComplete="new-password"
+                    minLength={8}
                   />
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="confirmPassword"
                     value={passwordForm.confirmPassword}
                     onChange={(e) =>
                       setPasswordForm((p) => ({
@@ -502,8 +506,10 @@ const EditProfileModal = ({
                       }))
                     }
                     className={inputClass}
+                    wrapperClassName="relative"
                     placeholder="Confirm new password"
                     autoComplete="new-password"
+                    minLength={8}
                   />
                   <button
                     type="button"

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import authService from "../redux/auth/authService";
 import Seo from "../components/Seo";
+import PasswordField from "../components/PasswordField";
 
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
@@ -69,23 +70,27 @@ const ResetPassword = () => {
         )}
         {!message && (
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <input
-              type="password"
+            <PasswordField
+              name="newPassword"
               required
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="New password (min 8)"
-              className="w-full rounded-md border px-3 py-2 font-medium dark:border-slate-600 dark:bg-slate-800"
+              autoComplete="new-password"
+              className="rounded-md border px-3 py-2 font-medium dark:border-slate-600 dark:bg-slate-800"
+              wrapperClassName="relative"
             />
-            <input
-              type="password"
+            <PasswordField
+              name="confirmPassword"
               required
               minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               placeholder="Confirm new password"
-              className="w-full rounded-md border px-3 py-2 font-medium dark:border-slate-600 dark:bg-slate-800"
+              autoComplete="new-password"
+              className="rounded-md border px-3 py-2 font-medium dark:border-slate-600 dark:bg-slate-800"
+              wrapperClassName="relative"
             />
             <button
               type="submit"

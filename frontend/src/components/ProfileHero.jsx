@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FaQuoteLeft, FaCog, FaStar, FaIdCard, FaEdit } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import ProfileAvatar from "./ProfileAvatar";
+import { formatDateTime, formatMonthYear } from "../utils/datetime";
 
 const followBtnClass =
   "inline-flex min-h-8 items-center rounded-full px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-sm";
@@ -202,6 +203,17 @@ const ProfileHero = ({
             <p className="mt-0.5 truncate text-xs font-medium text-blue-100 sm:mt-1 sm:text-sm">
               {profile.username ? `@${profile.username}` : "User ID not set"}
             </p>
+            {profile.createdAt ? (
+              <p className="mt-0.5 text-[11px] text-blue-100/90 sm:mt-1 sm:text-xs">
+                Joined{" "}
+                <time
+                  dateTime={profile.createdAt}
+                  title={formatDateTime(profile.createdAt)}
+                >
+                  {formatMonthYear(profile.createdAt)}
+                </time>
+              </p>
+            ) : null}
             <p className="mt-1 line-clamp-2 text-xs leading-snug text-blue-50/95 sm:mt-3 sm:line-clamp-none sm:text-base sm:leading-normal">
               {profile.bio || "No bio available yet."}
             </p>

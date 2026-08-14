@@ -17,19 +17,15 @@ import Seo from "../components/Seo";
 import EditProfileModal from "../components/EditProfileModal";
 import ProfileAvatar from "../components/ProfileAvatar";
 import { ProfileSkeleton } from "../components/Shimmer";
+import PasswordField from "../components/PasswordField";
 import { SITE_NAME } from "../constants/site";
 import authService from "../redux/auth/authService";
 import { updateProfile, syncAuthUser, setAccessToken } from "../redux/auth/authSlice";
+import { formatDate, formatDateTime } from "../utils/datetime";
 
 const formatDob = (value) => {
   if (!value) return "Not set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
-  return date.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return formatDate(value, { month: "long" }) || "Not set";
 };
 
 const DetailRow = ({ label, value, icon: Icon, mono = false }) => (
@@ -289,6 +285,14 @@ const FullProfile = () => {
                 label="QOTD stars"
                 value={String(profile.qotdStars || 0)}
               />
+              <DetailRow
+                label="Joined"
+                value={
+                  profile.createdAt
+                    ? formatDateTime(profile.createdAt)
+                    : "Not set"
+                }
+              />
             </div>
 
             <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
@@ -364,8 +368,8 @@ const FullProfile = () => {
                       {passwordMsg}
                     </p>
                   )}
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="currentPassword"
                     required
                     value={passwordForm.currentPassword}
                     onChange={(e) =>
@@ -374,12 +378,13 @@ const FullProfile = () => {
                         currentPassword: e.target.value,
                       }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    className="rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    wrapperClassName="relative"
                     placeholder="Current password"
                     autoComplete="current-password"
                   />
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="newPassword"
                     required
                     minLength={8}
                     value={passwordForm.newPassword}
@@ -389,12 +394,13 @@ const FullProfile = () => {
                         newPassword: e.target.value,
                       }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    className="rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    wrapperClassName="relative"
                     placeholder="New password (min 8)"
                     autoComplete="new-password"
                   />
-                  <input
-                    type="password"
+                  <PasswordField
+                    name="confirmPassword"
                     required
                     minLength={8}
                     value={passwordForm.confirmPassword}
@@ -404,7 +410,8 @@ const FullProfile = () => {
                         confirmPassword: e.target.value,
                       }))
                     }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    className="rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    wrapperClassName="relative"
                     placeholder="Confirm new password"
                     autoComplete="new-password"
                   />

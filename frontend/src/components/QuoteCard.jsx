@@ -20,24 +20,7 @@ import { quoteUi } from "../constants/quoteUi";
 import { profilePath } from "../utils/profileKey";
 import ProfileAvatar from "./ProfileAvatar";
 import FeedbackToast from "./FeedbackToast";
-
-const timeAgo = (date) => {
-  if (!date) return "";
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 5) return "just now";
-  const units = [
-    ["y", 31536000],
-    ["mo", 2592000],
-    ["d", 86400],
-    ["h", 3600],
-    ["m", 60],
-  ];
-  for (const [label, secs] of units) {
-    const value = Math.floor(seconds / secs);
-    if (value >= 1) return `${value}${label} ago`;
-  }
-  return `${seconds}s ago`;
-};
+import { formatPostStamp } from "../utils/datetime";
 
 const QuoteCard = ({
   quote,
@@ -86,6 +69,7 @@ const QuoteCard = ({
   const userId = user?._id?.toString();
   const isOwnQuote = authorId && authorId === userId;
   const canManageQuote = isOwnQuote || user?.role === "admin";
+  const postedStamp = formatPostStamp(quote.createdAt);
 
   const askLogin = () => {
     if (typeof onRequireLogin === "function") {
@@ -223,11 +207,19 @@ const QuoteCard = ({
             <p className="truncate text-sm font-bold text-gray-900 group-hover:text-blue-700 sm:text-base dark:text-slate-100 dark:group-hover:text-blue-300">
               {quote.author?.username || quote.author?.name}
             </p>
-            {quote.author?.username && quote.author?.name && (
-              <p className="truncate text-xs text-gray-500 dark:text-slate-400">
-                {quote.author.name}
-              </p>
-            )}
+            <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+              {quote.author?.username && quote.author?.name ? (
+                <span>{quote.author.name}</span>
+              ) : null}
+              {quote.author?.username && quote.author?.name && postedStamp.label
+                ? " · "
+                : null}
+              {postedStamp.label ? (
+                <time dateTime={quote.createdAt} title={postedStamp.title}>
+                  {postedStamp.label}
+                </time>
+              ) : null}
+            </p>
           </button>
         </div>
 
@@ -565,6 +557,7 @@ const QuoteCard = ({
                   const isNewest =
                     justPostedId === "fresh" &&
                     index === visibleComments.length - 1;
+                  const commentStamp = formatPostStamp(comment.createdAt);
 
                   return (
                     <div
@@ -605,11 +598,15 @@ const QuoteCard = ({
                                 {ui.youLabel}
                               </span>
                             )}
-                            {comment.createdAt && (
-                              <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                                {timeAgo(comment.createdAt)}
-                              </span>
-                            )}
+                            {commentStamp.label ? (
+                              <time
+                                dateTime={comment.createdAt}
+                                title={commentStamp.title}
+                                className="text-[11px] text-gray-500 dark:text-slate-400"
+                              >
+                                {commentStamp.label}
+                              </time>
+                            ) : null}
                           </div>
                           {editCommentId === comment._id ? (
                             <div className="mt-1.5 space-y-2">

@@ -7,3 +7,8 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Local quote batch tools / source data (keep off GitHub)
+tools/
+quote json/
+popular_quotes.json
