@@ -1,6 +1,6 @@
 {
   "name": "quotes-backend",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "QuoteApp API — Express + MongoDB backend",
   "main": "server.js",
   "type": "module",
