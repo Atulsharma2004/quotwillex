@@ -113,8 +113,17 @@ const seoFilesPlugin = (siteUrl) => ({
   closeBundle() {
     writeSeoStaticFiles(siteUrl, path.resolve(__dirname, "dist"));
   },
-  transformIndexHtml(html) {
-    return html.replaceAll("__SITE_URL__", siteUrl.replace(/\/+$/, ""));
+  transformIndexHtml: {
+    order: "post",
+    handler(html) {
+      const withSite = html.replaceAll("__SITE_URL__", siteUrl.replace(/\/+$/, ""));
+      return withSite.replace(
+        /<link\s+rel="stylesheet"([^>]*href="([^"]+\.css)"[^>]*)>/gi,
+        (_full, _attrs, href) =>
+          `<link rel="stylesheet" href="${href}" media="print" onload="this.media='all'">` +
+          `<noscript><link rel="stylesheet" href="${href}"></noscript>`
+      );
+    },
   },
 });
 
@@ -129,5 +138,17 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), seoFilesPlugin(siteUrl)],
+    build: {
+      cssCodeSplit: true,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            router: ["react-router", "react-router-dom"],
+            redux: ["@reduxjs/toolkit", "react-redux"],
+            axios: ["axios"],
+          },
+        },
+      },
+    },
   };
 });

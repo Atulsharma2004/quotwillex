@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,26 +6,37 @@ import {
   useLocation,
 } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import Profile from "./pages/Profile.jsx";
-import Signup from "./pages/Signup.jsx";
-import Login from "./pages/Login.jsx";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
 import Home from "./pages/Home.jsx";
-import Quotes from "./pages/Quotes.jsx";
-import PopularQuotes from "./pages/PopularQuotes.jsx";
-import Awards from "./pages/Awards.jsx";
-import Contact from "./pages/Contact.jsx";
-import Guidelines from "./pages/Guidelines.jsx";
-import Privacy from "./pages/Privacy.jsx";
-import FullProfile from "./pages/FullProfile.jsx";
-import AuthCallback from "./pages/AuthCallback.jsx";
-import VerifyEmail from "./pages/VerifyEmail.jsx";
-import ForgotPassword from "./pages/ForgotPassword.jsx";
-import ResetPassword from "./pages/ResetPassword.jsx";
-import NotFound from "./pages/NotFound.jsx";
 import PrivateRoute from "./components/PrivateRoute.jsx";
 import { bootstrapSession } from "./redux/auth/authSlice";
+
+const Profile = lazy(() => import("./pages/Profile.jsx"));
+const Signup = lazy(() => import("./pages/Signup.jsx"));
+const Login = lazy(() => import("./pages/Login.jsx"));
+const Quotes = lazy(() => import("./pages/Quotes.jsx"));
+const PopularQuotes = lazy(() => import("./pages/PopularQuotes.jsx"));
+const Awards = lazy(() => import("./pages/Awards.jsx"));
+const Contact = lazy(() => import("./pages/Contact.jsx"));
+const Guidelines = lazy(() => import("./pages/Guidelines.jsx"));
+const Privacy = lazy(() => import("./pages/Privacy.jsx"));
+const FullProfile = lazy(() => import("./pages/FullProfile.jsx"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback.jsx"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail.jsx"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword.jsx"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword.jsx"));
+const NotFound = lazy(() => import("./pages/NotFound.jsx"));
+
+const RouteFallback = () => (
+  <div
+    className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500 dark:text-slate-400"
+    role="status"
+    aria-live="polite"
+  >
+    Loading…
+  </div>
+);
 
 const MOBILE_FULLSCREEN_AUTH = new Set([
   "/login",
@@ -45,6 +56,7 @@ function AppShell() {
         <Header />
       </div>
       <main className="flex-1">
+        <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/signup" element={<Signup />} />
@@ -78,6 +90,7 @@ function AppShell() {
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </main>
       <div className={hideChromeOnMobile ? "hidden md:block" : undefined}>
         <Footer />

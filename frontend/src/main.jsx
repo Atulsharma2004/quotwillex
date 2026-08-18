@@ -5,6 +5,7 @@ import App from "./App.jsx";
 import { Provider } from "react-redux";
 import store from "./app/store.js";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
+import { scheduleAdsense } from "./utils/loadAdsense.js";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -15,6 +16,10 @@ createRoot(document.getElementById("root")).render(
     </Provider>
   </StrictMode>
 );
+
+if (import.meta.env.PROD) {
+  scheduleAdsense();
+}
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {

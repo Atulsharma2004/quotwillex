@@ -36,6 +36,18 @@ body {
   min-height: 100vh;
 }
 
+.header-bar.header-scrolled {
+  border-color: rgb(224 231 255 / 0.8);
+  background: rgb(255 255 255 / 0.9);
+  box-shadow: 0 4px 12px rgb(224 231 255 / 0.4);
+}
+
+.dark .header-bar.header-scrolled {
+  border-color: #334155;
+  background: rgb(2 6 23 / 0.9);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.3);
+}
+
 /* Broad dark-mode remaps so existing light Tailwind classes adapt site-wide */
 .dark .bg-white {
   background-color: #111827 !important;

@@ -191,7 +191,7 @@ const QuoteCard = ({
   };
 
   return (
-    <div className="mx-auto my-1.5 w-[95%] max-w-3xl rounded-lg border border-blue-100 bg-white/80 px-3 py-1.5 shadow-sm sm:my-2 sm:w-3/4 sm:px-4 sm:py-2 dark:border-slate-700 dark:bg-slate-900/80">
+    <div className="mx-auto my-1.5 w-full max-w-3xl rounded-lg border border-blue-100 bg-white/80 px-3 py-1.5 shadow-sm sm:my-2 sm:px-4 sm:py-2 dark:border-slate-700 dark:bg-slate-900/80">
       <div className="header-quote-post flex items-center justify-between gap-2 px-1 py-0.5 sm:px-2 sm:py-1">
         <div className="owner-detail group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left transition hover:bg-blue-50 sm:px-2 sm:py-2 dark:hover:bg-slate-800">
           <ProfileAvatar
@@ -252,7 +252,7 @@ const QuoteCard = ({
         )}
       </div>
 
-      <div className="relative flex min-h-[120px] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-indigo-800 to-blue-900 py-4 sm:min-h-[200px] sm:py-8">
+      <div className="relative flex min-h-[120px] items-center justify-center overflow-hidden bg-gradient-to-br from-slate-800 via-indigo-800 to-blue-900 px-3 py-4 sm:min-h-[200px] sm:px-4 sm:py-8">
         <div
           className="pointer-events-none absolute inset-0 opacity-40"
           aria-hidden
@@ -261,7 +261,7 @@ const QuoteCard = ({
               "radial-gradient(circle at 18% 22%, rgba(255,255,255,0.35), transparent 42%), radial-gradient(circle at 82% 78%, rgba(147,197,253,0.35), transparent 45%)",
           }}
         />
-        <div className="relative z-[1] mx-auto w-[90%] rounded-md border-2 border-white bg-white px-3 py-3 shadow-xl sm:w-3/4 sm:px-4 sm:py-4 dark:border-slate-600 dark:bg-slate-900">
+        <div className="relative z-[1] w-full rounded-md border-2 border-white bg-white px-3 py-3 shadow-xl sm:px-4 sm:py-4 dark:border-slate-600 dark:bg-slate-900">
           <p className="mb-1 text-base font-bold text-blue-600 sm:text-xl">
             <FaQuoteLeft />
           </p>

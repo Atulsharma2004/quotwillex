@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
@@ -18,10 +18,11 @@ import { logout } from "../redux/auth/authSlice";
 import authService from "../redux/auth/authService";
 import ThemeToggle from "./ThemeToggle";
 import GetAppButton from "./GetAppButton";
-import NotificationBell from "./NotificationBell";
 import { profilePath } from "../utils/profileKey";
 import ProfileAvatar from "./ProfileAvatar";
 import { DEFAULT_AVATAR } from "../constants/site";
+
+const NotificationBell = lazy(() => import("./NotificationBell"));
 
 const navLinkClass = ({ isActive }) =>
   `relative px-3 py-1.5 rounded-full text-sm font-semibold transition ${
@@ -48,7 +49,6 @@ const Header = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [guestMenuOpen, setGuestMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const searchRef = useRef(null);
   const profileRef = useRef(null);
   const guestMenuRef = useRef(null);
@@ -66,7 +66,17 @@ const Header = () => {
   };
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const el = headerRef.current;
+    if (!el) return undefined;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        el.classList.toggle("header-scrolled", window.scrollY > 8);
+        ticking = false;
+      });
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -260,11 +270,7 @@ const Header = () => {
     <header
       ref={headerRef}
       data-nav="profile-menu-only"
-      className={`sticky top-0 z-50 border-b transition-all duration-300 ${
-        scrolled
-          ? "border-indigo-100/80 bg-white/90 shadow-md shadow-indigo-100/40 backdrop-blur-xl dark:border-slate-700 dark:bg-slate-950/90 dark:shadow-black/30"
-          : "border-indigo-100/60 bg-gradient-to-r from-white via-indigo-50/70 to-white backdrop-blur-md dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
-      }`}
+      className="header-bar sticky top-0 z-50 border-b border-indigo-100/60 bg-gradient-to-r from-white via-indigo-50/70 to-white backdrop-blur-md transition-all duration-300 dark:border-slate-800 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950"
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4">
         <Link
@@ -281,6 +287,7 @@ const Header = () => {
               width={36}
               height={36}
               decoding="async"
+              fetchPriority="high"
             />
           </picture>
           <span className="hidden text-lg tracking-tight sm:inline">
@@ -315,7 +322,9 @@ const Header = () => {
               <div className="hidden lg:contents">
                 <GetAppButton />
               </div>
-              <NotificationBell currentUser={user} />
+              <Suspense fallback={null}>
+                <NotificationBell currentUser={user} />
+              </Suspense>
 
               <div ref={profileRef} className="relative flex shrink-0 items-center">
                 <button

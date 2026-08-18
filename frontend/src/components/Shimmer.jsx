@@ -7,7 +7,7 @@ const Bone = ({ className = "", onBrand = false }) => (
 
 export const QuoteCardSkeleton = () => (
   <div
-    className="shimmer-card border border-blue-100 px-4 py-4 my-2 w-3/4 mx-auto rounded-lg bg-white/80 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
+    className="shimmer-card mx-auto my-2 w-full rounded-lg border border-blue-100 bg-white/80 px-4 py-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80"
     aria-hidden
   >
     <div className="flex items-center gap-3 px-2 mb-4">

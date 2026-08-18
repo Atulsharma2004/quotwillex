@@ -541,8 +541,8 @@ const Home = () => {
                 Quotwellix
               </h1>
               <h2 className="mb-3 text-2xl font-semibold text-gray-900 dark:text-slate-100 sm:text-3xl">
-                Hello, {user.name}
-              </h2>
+          Hello, {user.name}
+        </h2>
               <p className="mx-auto max-w-xl text-gray-600 dark:text-slate-400">
                 Start with today’s featured line, then jump into writing,
                 exploring, or your profile.
@@ -614,15 +614,15 @@ const Home = () => {
             <p className="mx-auto mb-6 max-w-xl text-blue-50">
               Your next like, comment, or quote might be exactly what someone
               needed today.
-            </p>
-            <Link
-              to="/quotes"
+        </p>
+        <Link
+          to="/quotes"
               className="inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-blue-700 transition hover:scale-[1.02] hover:bg-blue-50"
-            >
+        >
               Go to Quotes <FaArrowRight className="text-xs" />
-            </Link>
+        </Link>
           </div>
-        </section>
+      </section>
       </div>
     );
   }
@@ -672,25 +672,25 @@ const Home = () => {
                 {showcaseQuotes.length > 1 && (
                   <div className="mt-4 flex justify-center gap-2">
                     {showcaseQuotes.slice(0, 8).map((item, i) => (
-                      <button
+                <button
                         key={item._id || i}
-                        type="button"
-                        aria-label={`Quote ${i + 1}`}
-                        onClick={() => {
-                          setFade(false);
-                          setTimeout(() => {
-                            setActiveIndex(i);
-                            setFade(true);
-                          }, 200);
-                        }}
-                        className={`h-2 rounded-full transition-all ${
-                          i === activeIndex
-                            ? "w-6 bg-blue-600"
-                            : "w-2 bg-blue-200 hover:bg-blue-300"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  type="button"
+                  aria-label={`Quote ${i + 1}`}
+                  onClick={() => {
+                    setFade(false);
+                    setTimeout(() => {
+                      setActiveIndex(i);
+                      setFade(true);
+                    }, 200);
+                  }}
+                  className={`h-2 rounded-full transition-all ${
+                    i === activeIndex
+                      ? "w-6 bg-blue-600"
+                      : "w-2 bg-blue-200 hover:bg-blue-300"
+                  }`}
+                />
+              ))}
+            </div>
                 )}
               </div>
             ) : (
@@ -747,13 +747,13 @@ const Home = () => {
           <p className="mx-auto mb-8 max-w-xl text-blue-50">
             Join Quotwellix and turn everyday thoughts into lines someone might
             remember.
-          </p>
-          <Link
-            to="/signup"
+        </p>
+        <Link
+          to="/signup"
             className="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-lg font-semibold text-blue-700 transition hover:scale-[1.02] hover:bg-blue-50"
-          >
+        >
             Create Your Account <FaArrowRight className="text-sm" />
-          </Link>
+        </Link>
         </div>
       </section>
     </div>
